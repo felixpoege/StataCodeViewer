@@ -1,0 +1,217 @@
+digraph StataReaderGraph {
+"1_3_preprocess_patents.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/1_3_preprocess_patents.do"];
+"1_4_inventor_productivity_panel.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/1_4_inventor_productivity_panel.do"];
+"1_5_network_dynamics.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/1_5_network_dynamics.do"];
+"2_1_deceased_inventors.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_1_deceased_inventors.do"];
+"2_2_deceased_inventors_netw.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_2_deceased_inventors_netw.do"];
+"2_3_prepare_match.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_3_prepare_match.do"];
+"2_4_execute_match.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_4_execute_match.do"];
+"2_6_prepare_teamtenure.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_6_prepare_teamtenure.do"];
+"2_6_prepare_teamtenure_IAB.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_6_prepare_teamtenure_IAB.do"];
+"2_6_prepare_teamtenure_patents.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_6_prepare_teamtenure_patents.do"];
+"2_7_mobility.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_7_mobility.do"];
+"2_10_productivity_focal.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_10_productivity_focal.do"];
+"3_1_describe_match.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/3_1_describe_match.do"];
+"3_2_regressions.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/3_2_regressions.do"];
+"2_5_prepare_regressions.do" [color=black, URL="file:///C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/2_5_prepare_regressions.do"];
+"iab_data_20180601" [color=blue, URL="file:///$orig/iab_data_20180601"];
+"1_Export_patent_ids_MPI_docdb_gener&orig" [color=blue, URL="file:///$orig/1_Export_patent_ids_MPI_docdb_gener&orig"];
+"erf_id_to_erf_id_ano" [color=blue, URL="file:///$orig/erf_id_to_erf_id_ano"];
+"patents_preprocessed" [color=green, URL="file:///$data/patents_preprocessed"];
+"yr_earliest_inventive_activity" [color=green, URL="file:///$data/yr_earliest_inventive_activity"];
+"network_all_patent" [color=green, URL="file:///$data/network_all_patent"];
+"yr_network_size" [color=green, URL="file:///$data/yr_network_size"];
+"panel_patent_productivity_DOCDB" [color=green, URL="file:///$data/panel_patent_productivity_DOCDB"];
+"network_link_updates" [color=green, URL="file:///$data/network_dynamics/network_link_updates"];
+"IAB_inventorbiographies_1975-2015_preprocessed" [color=blue, URL="file:///$data/IAB_inventorbiographies_1975-2015_preprocessed"];
+"bhp_7516_m06_wgen_v1" [color=blue, URL="file:///$orig/bhp_7516_m06_wgen_v1"];
+"2_set1_deceased_inventors_preprocessed" [color=green, URL="file:///$data/2_set1_deceased_inventors_preprocessed"];
+"Age_deceased_all.pdf" [color=orange, URL="file:///log/Age_deceased_all.pdf"];
+"fcl_age_deceased_all.pdf" [color=orange, URL="file:///$log/fcl_age_deceased_all.pdf"];
+"fcl_age_deceased_sample.pdf" [color=orange, URL="file:///$log/fcl_age_deceased_sample.pdf"];
+"fcl_productivity_deceased_all.pdf" [color=orange, URL="file:///$log/fcl_productivity_deceased_all.pdf"];
+"fcl_productivity_`var'_deceased_sample.pdf" [color=orange, URL="file:///$log/fcl_productivity_`var'_deceased_sample.pdf"];
+"2_set1_deceased_inventors_preprocessed_basic" [color=green, URL="file:///$data/2_set1_deceased_inventors_preprocessed_basic"];
+"IAB_inventorbiographies_1975-2015" [color=blue, URL="file:///$orig/IAB_inventorbiographies_1975-2015"];
+"network_all_establishments" [color=green, URL="file:///$data/network_all_establishments"];
+"set5_deceased_focal_erfid" [color=green, URL="file:///$data/set5_deceased_focal_erfid"];
+"tenure_by_establishment" [color=green, URL="file:///$data/tenure_by_establishment"];
+"BHP7516_preprocessed" [color=blue, URL="file:///$data/BHP7516_preprocessed"];
+"2_pseudo_deceased_inventors_pre_match" [color=green, URL="file:///$data/2_pseudo_deceased_inventors_pre_match"];
+"2_deceased_inventors_pre_match" [color=green, URL="file:///$data/2_deceased_inventors_pre_match"];
+"inventor_characteristics_yearly" [color=green, URL="file:///$data/inventor_characteristics_yearly"];
+"inventor_characteristics_constant" [color=green, URL="file:///$data/inventor_characteristics_constant"];
+"0_generate_coinventor_networks.do" [color=black, URL="file:///$prog/0_generate_coinventor_networks.do"];
+"set5_coinventor_deceased" [color=green, URL="file:///$data/set5_coinventor_deceased"];
+"0_execute_match.do" [color=black, URL="file:///$prog/0_execute_match.do"];
+"2_pseudo_deceased_inventors_matched_unique_match_keys_1" [color=green, URL="file:///$data/2_pseudo_deceased_inventors_matched_unique_match_keys_1"];
+"set5_pseudo_deceased_focal_erfid_1" [color=green, URL="file:///$data/set5_pseudo_deceased_focal_erfid_1"];
+"set5_coinventor_pseudo_deceased_1" [color=green, URL="file:///$data/set5_coinventor_pseudo_deceased_1"];
+"2_pseudo_deceased_inventors_matched_unique" [color=green, URL="file:///$data/2_pseudo_deceased_inventors_matched_unique"];
+"set5_pseudo_deceased_focal_erfid" [color=green, URL="file:///$data/set5_pseudo_deceased_focal_erfid"];
+"set5_coinventor_pseudo_deceased" [color=green, URL="file:///$data/set5_coinventor_pseudo_deceased"];
+"regressions_dataset" [color=blue, URL="file:///$data/regressions_dataset"];
+"erf_id_focal_death_betnr_tenure" [color=green, URL="file:///$data/erf_id_focal_death_betnr_tenure"];
+"tenure_by_establishment_yr" [color=blue, URL="file:///$data/tenure_by_establishment_yr"];
+"2_6_team_tenure" [color=green, URL="file:///$data/2_6_team_tenure"];
+"2_6_teamtenure_iab" [color=green, URL="file:///$data/2_6_teamtenure_iab"];
+"2_6_teamtenure_patents" [color=green, URL="file:///$data/2_6_teamtenure_patents"];
+"beruf_blo.do, nostop" [color=black, URL="file:///$prog/beruf_blo.do, nostop"];
+"crosswalk_ao_kreis_amr" [color=blue, URL="file:///$orig/crosswalk_ao_kreis_amr"];
+"IAB_inventormobility" [color=green, URL="file:///$data/IAB_inventormobility"];
+"2_10_focal_productivity" [color=green, URL="file:///$data/2_10_focal_productivity"];
+"placebo_match_`merging_key_set'" [color=blue, URL="file:///$data/placebo/placebo_match_`merging_key_set'"];
+"estsample_patents" [color=blue, URL="file:///$data/estsample_patents"];
+"treatment_control_pseudo" [color=blue, URL="file:///$data/treatment_control_pseudo"];
+"_co_tref`t_ref'" [color=green, URL="file:///$data/results//_co_tref`t_ref'"];
+"_fo_tref`t_ref'" [color=green, URL="file:///$data/results//_fo_tref`t_ref'"];
+"DiD__co" [color=green, URL="file:///$data/results//DiD__co"];
+"DiD__fo" [color=green, URL="file:///$data/results//DiD__fo"];
+"DiD__co_" [color=green, URL="file:///$data/results//DiD__co_"];
+"DiD_coll__co" [color=green, URL="file:///$data/results//DiD_coll__co"];
+"DiD_coll__ten_long_co" [color=green, URL="file:///$data/results//DiD_coll__ten_long_co"];
+subgraph cluster_1_3_preprocess_patents_do_use {
+   rank = same;
+   "iab_data_20180601";
+   "1_Export_patent_ids_MPI_docdb_gener&orig";
+   "erf_id_to_erf_id_ano";
+   graph[style=dotted];
+}
+subgraph cluster_2_4_execute_match_do_save {
+   rank = same;
+   "2_pseudo_deceased_inventors_matched_unique_match_keys_1";
+   "set5_pseudo_deceased_focal_erfid_1";
+   "set5_coinventor_pseudo_deceased_1";
+   graph[style=dotted];
+}
+subgraph cluster_2_6_prepare_teamtenure_do_save {
+   rank = same;
+   "erf_id_focal_death_betnr_tenure";
+   "2_6_team_tenure";
+   graph[style=dotted];
+}
+subgraph cluster_3_2_regressions_do_save {
+   rank = same;
+   "_co_tref`t_ref'";
+   "_fo_tref`t_ref'";
+   "DiD__co";
+   "DiD__fo";
+   "DiD__co_";
+   "DiD_coll__co";
+   "DiD_coll__ten_long_co";
+   graph[style=dotted];
+}
+subgraph cluster_2_1_deceased_inventors_do_export {
+   rank = same;
+   "Age_deceased_all.pdf";
+   "fcl_age_deceased_all.pdf";
+   "fcl_age_deceased_sample.pdf";
+   "fcl_productivity_deceased_all.pdf";
+   "fcl_productivity_`var'_deceased_sample.pdf";
+   graph[style=dotted];
+}
+subgraph cluster_2_4_execute_match_do_do {
+   rank = same;
+   "0_generate_coinventor_networks.do";
+   "0_execute_match.do";
+   graph[style=dotted];
+}
+"iab_data_20180601" -> "1_3_preprocess_patents.do"
+"1_Export_patent_ids_MPI_docdb_gener&orig" -> "1_3_preprocess_patents.do"
+"erf_id_to_erf_id_ano" -> "1_3_preprocess_patents.do"
+"1_3_preprocess_patents.do" -> "patents_preprocessed"
+"patents_preprocessed" -> "1_4_inventor_productivity_panel.do"
+"1_4_inventor_productivity_panel.do" -> "yr_earliest_inventive_activity"
+"1_4_inventor_productivity_panel.do" -> "network_all_patent"
+"1_4_inventor_productivity_panel.do" -> "yr_network_size"
+"1_4_inventor_productivity_panel.do" -> "panel_patent_productivity_DOCDB"
+"network_all_patent" -> "1_5_network_dynamics.do"
+"1_5_network_dynamics.do" -> "network_link_updates"
+"IAB_inventorbiographies_1975-2015_preprocessed" -> "2_1_deceased_inventors.do"
+"bhp_7516_m06_wgen_v1" -> "2_1_deceased_inventors.do"
+"yr_earliest_inventive_activity" -> "2_1_deceased_inventors.do"
+"panel_patent_productivity_DOCDB" -> "2_1_deceased_inventors.do"
+"2_1_deceased_inventors.do" -> "2_set1_deceased_inventors_preprocessed"
+"2_1_deceased_inventors.do" -> "Age_deceased_all.pdf"
+"2_1_deceased_inventors.do" -> "fcl_age_deceased_all.pdf"
+"2_1_deceased_inventors.do" -> "fcl_age_deceased_sample.pdf"
+"2_1_deceased_inventors.do" -> "fcl_productivity_deceased_all.pdf"
+"2_1_deceased_inventors.do" -> "fcl_productivity_`var'_deceased_sample.pdf"
+"2_1_deceased_inventors.do" -> "2_set1_deceased_inventors_preprocessed_basic"
+"IAB_inventorbiographies_1975-2015" -> "2_2_deceased_inventors_netw.do"
+"2_2_deceased_inventors_netw.do" -> "network_all_establishments"
+"2_set1_deceased_inventors_preprocessed_basic" -> "2_2_deceased_inventors_netw.do"
+"2_2_deceased_inventors_netw.do" -> "set5_deceased_focal_erfid"
+"IAB_inventorbiographies_1975-2015_preprocessed" -> "2_3_prepare_match.do"
+"2_3_prepare_match.do" -> "tenure_by_establishment"
+"BHP7516_preprocessed" -> "2_3_prepare_match.do"
+"panel_patent_productivity_DOCDB" -> "2_3_prepare_match.do"
+"yr_network_size" -> "2_3_prepare_match.do"
+"2_set1_deceased_inventors_preprocessed_basic" -> "2_3_prepare_match.do"
+"2_3_prepare_match.do" -> "2_pseudo_deceased_inventors_pre_match"
+"2_3_prepare_match.do" -> "2_deceased_inventors_pre_match"
+"2_3_prepare_match.do" -> "inventor_characteristics_yearly"
+"2_3_prepare_match.do" -> "inventor_characteristics_constant"
+"0_generate_coinventor_networks.do" -> "2_4_execute_match.do"
+"2_pseudo_deceased_inventors_pre_match" -> "2_4_execute_match.do"
+"set5_deceased_focal_erfid" -> "2_4_execute_match.do"
+"2_4_execute_match.do" -> "set5_coinventor_deceased"
+"0_execute_match.do" -> "2_4_execute_match.do"
+"2_set1_deceased_inventors_preprocessed" -> "2_4_execute_match.do"
+"2_4_execute_match.do" -> "2_pseudo_deceased_inventors_matched_unique_match_keys_1"
+"2_4_execute_match.do" -> "set5_pseudo_deceased_focal_erfid_1"
+"2_4_execute_match.do" -> "set5_coinventor_pseudo_deceased_1"
+"2_4_execute_match.do" -> "2_pseudo_deceased_inventors_matched_unique"
+"2_4_execute_match.do" -> "set5_pseudo_deceased_focal_erfid"
+"2_4_execute_match.do" -> "set5_coinventor_pseudo_deceased"
+"2_pseudo_deceased_inventors_matched_unique" -> "2_6_prepare_teamtenure.do"
+"regressions_dataset" -> "2_6_prepare_teamtenure.do"
+"IAB_inventorbiographies_1975-2015_preprocessed" -> "2_6_prepare_teamtenure.do"
+"tenure_by_establishment" -> "2_6_prepare_teamtenure.do"
+"2_6_prepare_teamtenure.do" -> "erf_id_focal_death_betnr_tenure"
+"tenure_by_establishment_yr" -> "2_6_prepare_teamtenure.do"
+"2_6_prepare_teamtenure.do" -> "2_6_team_tenure"
+"regressions_dataset" -> "2_6_prepare_teamtenure_IAB.do"
+"IAB_inventorbiographies_1975-2015_preprocessed" -> "2_6_prepare_teamtenure_IAB.do"
+"2_6_prepare_teamtenure_IAB.do" -> "2_6_teamtenure_iab"
+"network_all_patent" -> "2_6_prepare_teamtenure_patents.do"
+"2_set1_deceased_inventors_preprocessed_basic" -> "2_6_prepare_teamtenure_patents.do"
+"set5_pseudo_deceased_focal_erfid" -> "2_6_prepare_teamtenure_patents.do"
+"2_6_prepare_teamtenure_patents.do" -> "2_6_teamtenure_patents"
+"regressions_dataset" -> "2_7_mobility.do"
+"2_6_teamtenure_iab" -> "2_7_mobility.do"
+"IAB_inventorbiographies_1975-2015_preprocessed" -> "2_7_mobility.do"
+"beruf_blo.do, nostop" -> "2_7_mobility.do"
+"crosswalk_ao_kreis_amr" -> "2_7_mobility.do"
+"2_7_mobility.do" -> "IAB_inventormobility"
+"regressions_dataset" -> "2_10_productivity_focal.do"
+"2_pseudo_deceased_inventors_pre_match" -> "2_10_productivity_focal.do"
+"2_10_productivity_focal.do" -> "2_10_focal_productivity"
+"placebo_match_`merging_key_set'" -> "3_1_describe_match.do"
+"estsample_patents" -> "3_1_describe_match.do"
+"treatment_control_pseudo" -> "3_1_describe_match.do"
+"regressions_dataset" -> "3_2_regressions.do"
+"IAB_inventormobility" -> "3_2_regressions.do"
+"2_10_focal_productivity" -> "3_2_regressions.do"
+"2_6_teamtenure_patents" -> "3_2_regressions.do"
+"2_6_teamtenure_iab" -> "3_2_regressions.do"
+"3_2_regressions.do" -> "_co_tref`t_ref'"
+"3_2_regressions.do" -> "_fo_tref`t_ref'"
+"3_2_regressions.do" -> "DiD__co"
+"3_2_regressions.do" -> "DiD__fo"
+"3_2_regressions.do" -> "DiD__co_"
+"3_2_regressions.do" -> "DiD_coll__co"
+"3_2_regressions.do" -> "DiD_coll__ten_long_co"
+"set5_coinventor_deceased" -> "2_5_prepare_regressions.do"
+"set5_coinventor_pseudo_deceased" -> "2_5_prepare_regressions.do"
+"2_pseudo_deceased_inventors_matched_unique" -> "2_5_prepare_regressions.do"
+"2_5_prepare_regressions.do" -> "treatment_control_pseudo"
+"patents_preprocessed" -> "2_5_prepare_regressions.do"
+"yr_network_size" -> "2_5_prepare_regressions.do"
+"2_5_prepare_regressions.do" -> "estsample_patents"
+"panel_patent_productivity_DOCDB" -> "2_5_prepare_regressions.do"
+"inventor_characteristics_constant" -> "2_5_prepare_regressions.do"
+"inventor_characteristics_yearly" -> "2_5_prepare_regressions.do"
+"network_link_updates" -> "2_5_prepare_regressions.do"
+"2_5_prepare_regressions.do" -> "regressions_dataset"
+}
