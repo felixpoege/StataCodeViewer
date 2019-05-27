@@ -9,7 +9,7 @@ import os
 # import subprocess
 from StataReader import StataReader
 
-PATH_OUT = "Z:\\Eigene Dateien\\Projekte\\2018_DAG\\"
+PATH_OUT = "Z:/Eigene Dateien/Projekte/2018_DAG/"
 PATH_DO = "C:/Dropbox/DFG_Mobility/3_PROJECTS/P.1_sudden deaths/analysis/prog/"
 PATH_DOT = "C:/Program Files (x86)/Graphviz2.38/bin/dot.exe"
 
@@ -26,20 +26,21 @@ for file in ["1_3_preprocess_patents",
              "2_6_prepare_teamtenure_IAB",
              "2_6_prepare_teamtenure_patents",
              "2_7_mobility",
+             "2_9_firm_exit",
              "2_10_productivity_focal",
+             "2_11_event_study_data",
              "3_1_describe_match",
-             "3_2_regressions"]:
+             "3_2_regressions",
+             "4_3_matchquality"]:
     reader.read_stata(PATH_DO + file + ".do",
                       local={'folder': ''})
 
 # reader.set_verbose_locals(True)
 reader.read_stata(PATH_DO + "2_5_prepare_regressions" + ".do",
-                      local={'data_type': 'dead'}
-                      )
+                  local={'data_type': 'dead'})
 with open(PATH_OUT + "mobility.viz", "w+") as f:
     reader.export_graphviz(f)
 cmd = "\"%s\" -Tpng \"%s\" > \"%s\"" % (PATH_DOT,
                                         PATH_OUT + "mobility.viz",
                                         PATH_OUT + "mobility.png")
 o = os.popen(cmd).read()
-

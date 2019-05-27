@@ -15,6 +15,7 @@ class StataReader:
 
     patterns_use = [
             ("use\\s+(.*), clear", {1: 'use'}),
+            ("use\\s+(.*)\\s+if\\s*(.*), clear", {1: 'use'}),
             ("use\\s+(.*)using\\s+(.*), clear", {2: 'use'}),
             ("use\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), clear", {2: 'use'}),
             ("joinby\\s+(.*)using\\s+(.*),", {2: 'use'}),
@@ -47,9 +48,10 @@ class StataReader:
          + "coworkerdata\\((.*)\\)\\s*"
          + "outmatchdata\\((.*)\\)\\s*"
          + "outpseudodata\\((.*)\\)\\s*"
-         + "outcoinventordata\\((.*)\\)",
+         + "outcoinventordata\\((.*)\\)\\s*"
+         + "debugfile\\((.*)\\)",
          {1: 'use', 2: 'use', 3: 'use', 4: 'use',
-          5: 'save', 6: 'save', 7: 'save'})
+          5: 'save', 6: 'save', 7: 'save', 8: 'export'})
             ]
     patterns_global = [
             "global (.*)=(.*)",
@@ -512,41 +514,3 @@ class StataReader:
             i += 1
 
         f.write("}\n")
-
-
-if __name__ == '__main__':
-    PATH = r"X:\Prof. Harhoff\Harhoff_INTERN\FORSCHUNG\NPL\\"
-    reader = StataReader()
-
-    reader.disregard_node("NPL_paths.do")
-    reader.disregard_node("clean_expand_query.do")
-
-    # Test 1: Three files
-    reader.read_stata(PATH
-                      + r"Conferences_npl/do/read_conference_items_wos.do")
-    reader.read_stata(PATH
-                      + r"Conferences_npl/do/read_conference_items_scopus.do")
-    reader.read_stata(PATH + r"do/conf_spons/describe/desc_full_sample.do")
-    reader.parse_global_file(PATH + "NPL_paths.do")
-    reader.parse_global_file(PATH
-                             + r"do/conf_spons/estimation/Manski77_master.do")
-    reader.read_stata(PATH + r"do/conf_spons/build_conf_final.do")
-    reader.read_stata(PATH + r"do/conf_spons/build_conf_final_locations.do")
-    """
-    reader.read_stata(PATH + r"do/conf_spons/build_scopus_citation_counts.do")
-    reader.read_stata(PATH + r"do/conf_spons/describe/Descriptives.do")
-    reader.read_stata(PATH
-                      + r"do/conf_spons/test_build_conf_similarity_scores.do")
-    reader.read_stata(PATH
-    + r"do/conf_spons/estimation/describe_citation_counts.do")
-    # reader.read_stata(PATH + r"do/conf_spons/estimation/Manski77_prepare.do")
-    """
-    reader.read_stata(PATH + r"do/conf_spons/Geocoding/prepare_geocoding.do")
-    reader.read_stata(PATH + r"do/conf_spons/Geocoding/"
-                      + "finalize_conference_geocoding.do")
-    reader.read_stata(PATH + r"do/conf_spons/Geocoding//"
-                      + "build_company_applicant_portfolios.do")
-    reader.read_stata(PATH + r"do/conf_spons/Geocoding/"
-                      + "build_company_inventor_portfolios.do")
-
-    reader.export_graphviz(sys.stdout)
