@@ -514,3 +514,30 @@ class StataReader:
             i += 1
 
         f.write("}\n")
+
+    def read_folder(self, folder, exclude=[]):
+        for file in os.scandir(folder):
+            file_name = file.name
+            if file_name in exclude:
+                continue
+            if os.path.splitext(file_name)[1] == ".do":
+                print("Reading Stata file %s" % file_name)
+                self.read_stata(os.path.join(folder, file_name))
+
+    def get_dta_files(self):
+        """
+        Return a list of all possible dta-files involved in this project.
+        Also return which file used them.
+        """
+        dta_files = {}
+        for file in self.parsed.keys():
+            file_content = self.parsed[file]
+            for node_key in file_content.keys():
+                node = file_content[node_key]
+                if node[0] in ['use', 'save']:
+                    if node[1] in dta_files:
+                        if node[1] not in dta_files[node[1]]:
+                            dta_files[node[1]].append(file)
+                    else:
+                        dta_files[node[1]] = [file]
+        return dta_files
