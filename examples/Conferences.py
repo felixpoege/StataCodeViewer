@@ -11,16 +11,46 @@ import hashlib
 sys.path.append("../")
 from StataReader import StataReader
 
-PATH = r"X:\Prof. Harhoff\Harhoff_INTERN\FORSCHUNG\NPL\\"
+PATH = "X:/Prof. Harhoff/Harhoff_INTERN/RESEARCH/NPL/"
 PATH_OUT = "Z:/Eigene Dateien/Projekte/2018_DAG/"
-PATH_DOT = "C:/Program Files (x86)/Graphviz2.38/bin/dot.exe"
+
+"""
+Create flow chart for the data construction files
+"""
+files = ["build_conf_final",
+         "build_biographies",
+         "compute_similarity",
+         "build_cooperations",
+         "build_previous_participation",
+         "build_conf_citation_counts",
+         "estimation_matching/matching"]
 
 reader = StataReader()
-
 reader.disregard_node("NPL_paths.do")
+reader.disregard_node("settings.do")
 reader.disregard_node("clean_expand_query.do")
-
+reader.disregard_node("generate_conf_part_vars.do")
 reader.parse_global_file(PATH + "NPL_paths.do")
+
+for file in files:
+    reader.read_stata(PATH + "do/conf_spons/" + file + ".do")
+
+reader.export_graphviz(PATH_OUT + "conferences_data.viz")
+reader.compile_graphviz(PATH_OUT + "conferences_data.viz",
+                        PATH_OUT + "conferences_data.pdf")
+
+xxxx
+reader.export_graphviz(PATH_OUT + "conferences.viz")
+reader.compile_graphviz(PATH_OUT + "conferences.viz",
+                        PATH_OUT + "conferences.pdf")
+
+reader = StataReader()
+reader.disregard_node("NPL_paths.do")
+reader.disregard_node("settings.do")
+reader.disregard_node("clean_expand_query.do")
+reader.parse_global_file(PATH + "NPL_paths.do")
+
+
 reader.read_folder(PATH + r"Conferences_npl/do/")
 reader.read_folder(PATH + r"do/conf_spons/",
                    exclude=['master.do'])
@@ -48,14 +78,10 @@ reader.read_stata(PATH + r"do/conf_spons/Geocoding//"
 reader.read_stata(PATH + r"do/conf_spons/Geocoding/"
                   + "build_company_inventor_portfolios.do")
 """
-reader.read_folder(PATH + r"do/conf_spons/Geocoding/")
-with open(PATH_OUT + "conferences.viz", "w") as f:
-    reader.export_graphviz(f)
-
-cmd = "\"%s\" -Tpng \"%s\" > \"%s\"" % (PATH_DOT,
-                                        PATH_OUT + "conferences.viz",
-                                        PATH_OUT + "conferences.png")
-o = os.popen(cmd).read()
+# reader.read_folder(PATH + r"do/conf_spons/Geocoding/")
+reader.export_graphviz(PATH_OUT + "conferences.viz")
+reader.compile_graphviz(PATH_OUT + "conferences.viz",
+                        PATH_OUT + "conferences.pdf")
 
 PATH_STATA = "C:/Program Files (x86)/Stata15/StataSE-64.exe"
 
