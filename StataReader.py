@@ -4,11 +4,15 @@ Created on Tue Jul 24 16:50:46 2018
 
 See also: https://github.com/johnyf/pycflow2dot
 
+Required libraries:
+    - graphviz
+
 @author: Felix Pöge
 """
 import re
 import os
 import sys
+from graphviz import Source
 
 
 class StataReader:
@@ -36,8 +40,12 @@ class StataReader:
             ("graph\\s+export\\s+(.*), replace", {1: 'export'}),
             ("graph\\s+export\\s+(.*),", {1: 'export'}),
             ("graph\\s+export\\s+(.*)", {1: 'export'}),
-            ("file\\s+open\\s+(.*)\\s+using\\s+(.*),", {2: 'export'}),
-            ("esttab\\s+(.*)\\s+using\\s+(.*),", {2: 'export'})
+            ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
+            ("esttab\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'})
+            ]
+
+    patterns_exclude = [
+            ("^\\s*note:")
             ]
 
     patterns_ado = [
@@ -71,6 +79,7 @@ class StataReader:
         self.disregarded_nodes = []
         self.verbose_comments = False
         self.verbose_locals = False
+        self.indent = "\t"
 
     def parse_global_file(self, fname):
         """
@@ -233,6 +242,20 @@ class StataReader:
                 if self.verbose_locals:
                     print("Found local %s -> %s" % (local_name,
                                                     local_value))
+            # Check if the current line has a pattern that needs to be
+            # excluded
+            for pattern in self.patterns_exclude:
+                pat = re.compile(pattern)
+                m = pat.search(line)
+                if m is None:
+                    continue
+                else:
+                    """
+                    print("Exclude pattern %s found in line %s"
+                          % (pattern, line))
+                    """
+                    line = ""
+                    break
 
             # Iterate over all patterns and try to find the best match
             best_pattern = None
@@ -374,6 +397,8 @@ class StataReader:
                 fname)
 
     def _ftype_to_color(self, ftype):
+        if ftype == 'cluster':
+            return "black"
         if ftype == 'erase':
             return "red"
         if ftype == 'use':
@@ -395,14 +420,42 @@ class StataReader:
                 color,
                 fname)
 
-    def export_graphviz(self, f):
+    def compile_graphviz(self, in_filename, out_filename,
+                         view=True):
+        print("Compile graphviz content in %s" % in_filename)
+        with open(in_filename, "r") as f:
+            file_content = f.readlines()
+        file_content = "\n".join(file_content)
+
+        src = Source(file_content)
+        src.render(out_filename, view=True)
+
+    def export_graphviz(self, file,
+                        separate_groups=False,
+                        stack_clusters=2):
         """
         Export for graphical display
+
+        separate_groups: If a file creates a number of files without
+            subsequent usage, show them separately. Depending on the layout,
+            they can otherwise take a lot of space.
+
+        stack_clusters: Number of rows that grouped clusters should
+            have. Default 2. Set to 'column' to only export one column.
         """
+        if type(file) is str:
+            f = open(file, "w+")
+            f_opened = True
+        else:
+            f = file
+            f_opened = False
+
         f.write("digraph StataReaderGraph {\n")
+        f.write(self.indent + "graph [compound=true];\n")
 
         file_links = []
         file_nodes = []
+        file_node_types = []
         # In here, save for each type a dictionary of node names
         # For each node name, save all do-files that it is accessed by
         file_clusters = {
@@ -418,12 +471,22 @@ class StataReader:
         """
         Get all the links to be written & write out all nodes
         """
+        # Add comment: Stata Code nodes start here
+        f.write("/*\n")
+        f.write(self.indent + "Stata Code nodes\n")
+        f.write("*/\n")
         # Define Stata Code node
         for fname in self.parsed:
-            f.write(self._exp_get_do_node(fname) + ";\n")
+            f.write(self.indent + self._exp_get_do_node(fname) + ";\n")
             fname_node = os.path.split(fname)[1]
             file_nodes.append(fname_node)
+            file_node_types.append(".do")
+        f.write("\n")
 
+        # Add comment: Individual file nodes start here
+        # First, find out which nodes are present. Also generate file links.
+        # Since both lists may be modified by subsequent options, do not
+        # write them out, yet
         for fname in self.parsed:
             fname_node = os.path.split(fname)[1]
             for i in sorted(self.parsed[fname].keys()):
@@ -436,37 +499,45 @@ class StataReader:
 
                 # If the node has not been written, do so now
                 if t[1] not in file_nodes:
-                    f.write(self._exp_get_file_node(t[0], t[1]) + ";\n")
                     file_nodes.append(t[1])
+                    file_node_types.append(t[0])
                     file_cluster_nodetypes[fname_node2] = t[0]
 
+                # The type of action determines the direction of the arrow
                 if t[0] in ["export", "save", "erase"]:
                     file_links.append((fname_node, fname_node2))
                 else:
                     file_links.append((fname_node2, fname_node))
+
                 # For the clustering list
                 if fname_node2 not in file_clusters[t[0]]:
                     file_clusters[t[0]][fname_node2] = []
                 if fname_node not in file_clusters[t[0]][fname_node2]:
                     file_clusters[t[0]][fname_node2].append(fname_node)
+
                 if fname_node2 not in file_cluster_usage:
-                    file_cluster_usage[fname_node2] = [fname_node]
-                else:
-                    file_cluster_usage[fname_node2].append(fname_node)
+                    file_cluster_usage[fname_node2] = []
+                file_cluster_usage[fname_node2].append(fname_node)
+        f.write("\n")
 
         """
         Determine which nodes need to be clustered together.
         This happens when nodes are only connected to a file. For clearer
         visibility, they should then be grouped.
         """
-
         """
         Write them out!
         """
+        add_invis = []
+        cluster_names = []
+        cluster_idx = 0
         for cluster_type in file_clusters.keys():
+            # Identify possible clusters
             groups = {}
             for node in file_clusters[cluster_type].keys():
                 node_connections = file_clusters[cluster_type][node]
+                # Only create a cluster if the number of nodes interacting
+                # with a file is one.
                 if len(node_connections) == 1:
                     file_for_node = node_connections[0]
                     if file_for_node not in groups:
@@ -475,16 +546,115 @@ class StataReader:
                         if file_cluster_nodetypes[node] == cluster_type:
                             groups[file_for_node].append(node)
 
+            # Show clusters separately in the graph
             for cluster in groups:
                 if len(groups[cluster]) > 1:
+
+                    # Determine cluster type, name derives from it
+                    # Clusters with .dta files should never be grouped
+                    # together
+                    ext = os.path.splitext(groups[cluster][0])
+                    if ext[1] == "":
+                        cluster_name = "Cluster %d" \
+                            % (cluster_idx)
+                    else:
+                        cluster_name = "Cluster %d\n(%d %s files)" \
+                            % (cluster_idx, len(groups[cluster]), ext[1])
+                    cluster_idx += 1
+
+                    if separate_groups:
+                        # Add a new replacement node
+                        if ext[1] != "":
+                            file_nodes.append(cluster_name)
+                            file_node_types.append("cluster")
+                            cluster_names.append(cluster_name)
+
+                        # Go through every element contained in the cluster
+                        # and replace it everywhere by a new name
+                        # This concerns especially file links
+                        for element in groups[cluster]:
+                            if ext[1] == "":
+                                continue
+                            for i in range(len(file_links)):
+                                if file_links[i][0] == element:
+                                    file_links[i] = (cluster_name,
+                                                     file_links[i][1])
+                                if file_links[i][1] == element:
+                                    file_links[i] = (file_links[i][0],
+                                                     cluster_name)
+
                     f.write("subgraph cluster_%s_%s {\n"
                             % (cluster.replace(".", "_"), cluster_type))
-                    f.write("   rank = same;\n")
+                    if separate_groups:
+                        f.write(self.indent
+                                + 'label = "'
+                                + cluster_name.replace("\n", " ")
+                                + " -> file %s" % cluster_type
+                                + '";\n')
+                        f.write(self.indent + 'labeljust = "l";\n')
+                    f.write(self.indent + 'shape=rect;\n')
+                    f.write(self.indent + "rank = same;\n")
                     for element in groups[cluster]:
-                        f.write("   \"%s\";\n" % element)
-                    f.write("   graph[style=dotted];\n")
+                        f.write(self.indent + "\"%s\";\n" % element)
+
+                    # Add hidden edges to give some internal structure to
+                    # the cluster
+                    if stack_clusters == 'column':
+                        stack_clusters = 999
+                    idx = 0
+                    while (idx < len(groups[cluster])):
+                        for i in range(stack_clusters-1):
+                            if idx+1 < len(groups[cluster]):
+                                add_invis.append('"%s" -> "%s" %s;\n'
+                                                 % (groups[cluster][idx],
+                                                    groups[cluster][idx+1],
+                                                    "[style=invis]"))
+
+                                # Remove external link to the internally linked
+                                # ones
+                                idx_fl = 0
+                                while idx_fl < len(file_links):
+                                    if file_links[idx_fl][1] \
+                                      == groups[cluster][idx+1]:
+                                        file_links.pop(idx_fl)
+                                        continue
+                                    idx_fl += 1
+                            else:
+                                break
+                            idx += 1
+                        idx += 1
+
+
+                    f.write(self.indent + "graph[style=dotted];\n")
                     f.write("}\n")
 
+        # Order clusters
+        """
+        TODO: More space-efficient display of the clusters?
+        idx1 = 0
+        idx2 = 1
+        add_invis.append('"%s" -> "%s" [style=invis];\n'
+                         % (cluster_names[idx1],
+                            cluster_names[idx2]))
+        """
+
+        """
+        Write the input/output nodes into the output file
+        """
+        f.write("/*\n")
+        f.write("\tInput / Output file nodes\n")
+        f.write("*/\n")
+        for i in range(len(file_nodes)):
+            if file_node_types[i] == ".do":
+                continue
+            f.write(self.indent
+                    + self._exp_get_file_node(file_node_types[i],
+                                              file_nodes[i]) + ";\n")
+
+        # Add comment: Input / Output relationships start here
+        f.write("/*\n")
+        f.write(self.indent + "Input/Output relationships\n")
+        f.write("*/\n")
         # Write out code lines
         i = 0
         while i < len(file_links):
@@ -506,14 +676,24 @@ class StataReader:
             fname_node2 = os.path.split(t[1])[1]
 
             if has_backward is False:
-                f.write("\"%s\" -> \"%s\"\n" % (link[0], link[1]))
+                f.write(self.indent
+                        + "\"%s\" -> \"%s\"\n" % (link[0], link[1]))
             else:
-                f.write("\"%s\" -> \"%s\" [dir=\"both\"]\n"
+                f.write(self.indent
+                        + "\"%s\" -> \"%s\" [dir=\"both\"]\n"
                         % (link[0], link[1]))
 
             i += 1
 
+        """
+        Write out invisible edges
+        """
+        for invis in add_invis:
+            f.write(self.indent + invis)
+
         f.write("}\n")
+        if f_opened:
+            f.close()
 
     def read_folder(self, folder, exclude=[]):
         for file in os.scandir(folder):
