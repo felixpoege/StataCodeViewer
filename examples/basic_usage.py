@@ -25,4 +25,6 @@ for node in ignore_nodes:
 
 # Create the flowchart
 reader.export_graphviz("flowchart.viz")
-reader.compile_graphviz("flowchart.viz", "flowchart")
+reader.compile_graphviz("flowchart.viz",
+                        "flowchart",
+                        render_format='png')

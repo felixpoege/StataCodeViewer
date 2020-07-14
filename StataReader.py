@@ -427,14 +427,16 @@ class StataReader:
                 fname)
 
     def compile_graphviz(self, in_filename, out_filename,
-                         view=True):
+                         view=True,
+                         render_format='pdf'):
         print("Compile graphviz content in %s" % in_filename)
         with open(in_filename, "r") as f:
             file_content = f.readlines()
         file_content = "\n".join(file_content)
 
         src = Source(file_content)
-        src.render(out_filename, view=True)
+        src.render(out_filename, view=True,
+                   format=render_format)
 
     def export_graphviz(self, file,
                         separate_groups=False,
