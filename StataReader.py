@@ -16,6 +16,9 @@ from graphviz import Source
 
 
 class StataReader:
+    """
+    TODO: Separate colors for estimates use / estimates save ?
+    """
 
     patterns_use = [
             ("use\\s+(.*), clear", {1: 'use'}),
@@ -28,7 +31,8 @@ class StataReader:
             ("import\\s+delimited\\s+(.*),", {1: 'use_ext'}),
             ("import\\s+excel\\s+(.*),", {1: 'use_ext'}),
             ("^do\\s+(.*)(?:,)?", {1: 'do'}),
-            ("\\s+do\\s+(.*)(?:,)?", {1: 'do'})
+            ("\\s+do\\s+(.*)(?:,)?", {1: 'do'}),
+            ("estimates use\\s+(.*)", {1: 'use'})
             ]
     patterns_save = [
             ("save\\s+(.*)", {1: 'save'}),
@@ -41,7 +45,9 @@ class StataReader:
             ("graph\\s+export\\s+(.*),", {1: 'export'}),
             ("graph\\s+export\\s+(.*)", {1: 'export'}),
             ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
-            ("esttab\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'})
+            ("esttab\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
+            ("estimates save\\s+(.*)", {1: 'save'}),
+            ("estimates save\\s+(.*),", {1: 'save'})
             ]
 
     patterns_exclude = [

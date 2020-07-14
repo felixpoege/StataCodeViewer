@@ -118,3 +118,4 @@ dmypy.json
 Thumbs.db
 *.md
 *.pdf
+examples/stata_example/regression.tex
