@@ -25,6 +25,7 @@ You'll need Python to run the script.
 Put this Code to the same folder as the other examples.
 
 ```python
+import os
 import sys
 sys.path.append("../")
 from StataReader import StataReader
@@ -43,5 +44,5 @@ for node in ignore_nodes:
 
 # Create the flowchart
 reader.export_graphviz("flowchart.viz")
-reader.compile_graphviz(flowchart.viz", "flowchart")
+reader.compile_graphviz("flowchart.viz", "flowchart")
 ```
