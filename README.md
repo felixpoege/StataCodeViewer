@@ -1,6 +1,6 @@
 # StataCodeViewer
 
-Visualize flows of Stata code
+Visualize flows of Stata code. This helps to create a visual overview over large Stata projects.
 
 Which .do file
 
@@ -8,7 +8,7 @@ Which .do file
 
 * Creates which files
 
-Global and Local processing is very ad-hoc, so this works best for relatively simple and linear scripts (as many Stata projects tend to be ...)
+Global and Local processing is very ad-hoc, this is not a complete parser of Stata code by a long shot. So, this only works if the Stata scripts are kept relatively linear and simple. Especially, data files are processed in loops and with locals are a problem. However, as Stata projects tend to be just like that, it should be fine for many applications.
 
 ## Installation / Usage
 
@@ -44,5 +44,10 @@ for node in ignore_nodes:
 
 # Create the flowchart
 reader.export_graphviz("flowchart.viz")
-reader.compile_graphviz("flowchart.viz", "flowchart")
+reader.compile_graphviz("flowchart.viz", "flowchart",
+                        render_format="png")
 ```
+
+The output then looks as follows:
+
+![Default Flowchart Output](https://github.com/felixpoege/StataCodeViewer/blob/master/examples/flowchart.png)
