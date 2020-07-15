@@ -288,9 +288,21 @@ class StataReader:
             best_pattern_type = None
             for pattern in self.patterns:
                 pat = re.compile(pattern[0])
-                m = pat.search(line)
+                m = pat.search(line.strip())
                 if m is None:
                     continue
+                # Make sure that before the command, there are only
+                # accepted patterns.
+                line_pos = line.find(m.group(0))
+                line_starts = line[:line_pos].strip()
+                if line_starts != "":
+                    if "quietly".startswith(line_starts):
+                        pass
+                    elif "noisily".startswith(line_starts):
+                        pass
+                    else:
+                        print(f"Before pattern: {line_starts}")
+                        continue
                 if len(pattern[0]) > best_pattern_len:
                     best_pattern_len = len(pattern[0])
                     best_pattern = m
