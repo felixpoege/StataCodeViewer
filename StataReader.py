@@ -596,8 +596,7 @@ class StataReader:
                     # together
                     ext = os.path.splitext(groups[cluster][0])
                     if ext[1] == "":
-                        cluster_name = "Cluster %d" \
-                            % (cluster_idx)
+                        cluster_name = f"Cluster {cluster_idx}"
                     else:
                         cluster_name = "Cluster %d\n(%d %s files)" \
                             % (cluster_idx, len(groups[cluster]), ext[1])
@@ -657,6 +656,10 @@ class StataReader:
                                 while idx_fl < len(file_links):
                                     if file_links[idx_fl][1] \
                                       == groups[cluster][idx+1]:
+                                        file_links.pop(idx_fl)
+                                        continue
+                                    if file_links[idx_fl][0] \
+                                      == groups[cluster][idx]:
                                         file_links.pop(idx_fl)
                                         continue
                                     idx_fl += 1
