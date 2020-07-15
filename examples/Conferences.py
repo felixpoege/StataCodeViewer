@@ -17,72 +17,89 @@ PATH_OUT = "Z:/Eigene Dateien/Projekte/2018_DAG/"
 """
 Create flow chart for the data construction files
 """
-files = ["build_conf_final",
+files = ["read_bvd_id_components",
+         "build_conf_participant_aff",
+         "build_conf_final",
          "build_biographies",
          "compute_similarity",
          "build_cooperations",
          "build_previous_participation",
          "build_conf_citation_counts",
-         "estimation_matching/matching"]
+         "estimation_matching/regs_second_stage"]
 
+files_mainreg = [
+        "estimation_matching/matching_1_conf_level",
+        "estimation_matching/matching_2_geolocation",
+        "estimation_matching/matching_3_first_stage",
+        "estimation_matching/matching_4_auxiliaries",
+        "estimation_matching/matching_5_second_stage",
+        "estimation_matching/balancing_table",
+        "flows/flows_build_dataset",
+        "flows/flows_did_analysis",
+        "flows/plot_flows_did_analysis"]
+
+files_descriptives = [
+        "scoreboard_panel/match_grid_orbis",
+        "scoreboard_panel/describe_companies",
+        "scoreboard_panel/describe_companies_table",
+        "scoreboard_panel/describe_scoreboard",
+        "describe/describe_citation_counts",
+        "describe/desc_full_sample",
+        "describe/describe_coauthorships",
+        "describe/describe_count",
+        "describe/describe_sample_coverage",
+        "describe/Descriptives",
+        "describe/table_core_fields"]
+
+nodes_disregard = [
+        "NPL_paths.do",
+        "settings.do",
+        "clean_expand_query.do",
+        "generate_conf_part_vars.do",
+        "concatenate_var.do"]
+
+"""
+Create graph for the main analysis
+"""
 reader = StataReader()
-reader.disregard_node("NPL_paths.do")
-reader.disregard_node("settings.do")
-reader.disregard_node("clean_expand_query.do")
-reader.disregard_node("generate_conf_part_vars.do")
+for node in nodes_disregard:
+    reader.disregard_node(node)
 reader.parse_global_file(PATH + "NPL_paths.do")
 
 for file in files:
     reader.read_stata(PATH + "do/conf_spons/" + file + ".do")
+for file in files_mainreg:
+    reader.read_stata(PATH + "do/conf_spons/" + file + ".do")
 
-reader.export_graphviz(PATH_OUT + "conferences_data.viz")
-reader.compile_graphviz(PATH_OUT + "conferences_data.viz",
-                        PATH_OUT + "conferences_data.pdf")
+reader.export_graphviz(PATH_OUT + "conferences_mainreg.viz",
+                       separate_groups=True,
+                       stack_clusters=5)
+reader.compile_graphviz(PATH_OUT + "conferences_mainreg.viz",
+                        PATH_OUT + "conferences_mainreg")
 
-xxxx
-reader.export_graphviz(PATH_OUT + "conferences.viz")
-reader.compile_graphviz(PATH_OUT + "conferences.viz",
-                        PATH_OUT + "conferences.pdf")
-
+"""
+Create graph for descriptives and supplementary analysis
+"""
 reader = StataReader()
-reader.disregard_node("NPL_paths.do")
-reader.disregard_node("settings.do")
-reader.disregard_node("clean_expand_query.do")
+for node in nodes_disregard:
+    reader.disregard_node(node)
 reader.parse_global_file(PATH + "NPL_paths.do")
 
+for file in files:
+    reader.read_stata(PATH + "do/conf_spons/" + file + ".do")
+for file in files_descriptives:
+    reader.read_stata(PATH + "do/conf_spons/" + file + ".do")
 
-reader.read_folder(PATH + r"Conferences_npl/do/")
-reader.read_folder(PATH + r"do/conf_spons/",
-                   exclude=['master.do'])
-reader.read_folder(PATH + r"do/conf_spons/describe/")
+reader.export_graphviz(PATH_OUT + "conferences_descriptives.viz",
+                       separate_groups=True,
+                       stack_clusters=5)
+reader.compile_graphviz(PATH_OUT + "conferences_descriptives.viz",
+                        PATH_OUT + "conferences_descriptives")
 
+xxxxxxx
 """
-reader.parse_global_file(PATH
-                         + r"do/conf_spons/estimation/Manski77_master.do")
+Automatically create documentation files concerning Stata file contents
 """
-"""
-reader.read_stata(PATH + r"do/conf_spons/build_scopus_citation_counts.do")
-reader.read_stata(PATH + r"do/conf_spons/describe/Descriptives.do")
-reader.read_stata(PATH
-                  + r"do/conf_spons/test_build_conf_similarity_scores.do")
-reader.read_stata(PATH
-+ r"do/conf_spons/estimation/describe_citation_counts.do")
-# reader.read_stata(PATH + r"do/conf_spons/estimation/Manski77_prepare.do")
-"""
-"""
-reader.read_stata(PATH + r"do/conf_spons/Geocoding/prepare_geocoding.do")
-reader.read_stata(PATH + r"do/conf_spons/Geocoding/"
-                  + "finalize_conference_geocoding.do")
-reader.read_stata(PATH + r"do/conf_spons/Geocoding//"
-                  + "build_company_applicant_portfolios.do")
-reader.read_stata(PATH + r"do/conf_spons/Geocoding/"
-                  + "build_company_inventor_portfolios.do")
-"""
-# reader.read_folder(PATH + r"do/conf_spons/Geocoding/")
-reader.export_graphviz(PATH_OUT + "conferences.viz")
-reader.compile_graphviz(PATH_OUT + "conferences.viz",
-                        PATH_OUT + "conferences.pdf")
-
 PATH_STATA = "C:/Program Files (x86)/Stata15/StataSE-64.exe"
 
 # Retreive all data files involved in the project
