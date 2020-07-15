@@ -21,12 +21,13 @@ class StataReader:
     """
 
     patterns_use = [
-            ("use\\s+(.*), clear", {1: 'use'}),
-            ("use\\s+(.*)\\s+if\\s*(.*), clear", {1: 'use'}),
-            ("use\\s+(.*)using\\s+(.*), clear", {2: 'use'}),
-            ("use\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), clear", {2: 'use'}),
+            ("use\\s+(.*), (clear|replace)", {1: 'use'}),
+            ("use\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {1: 'use'}),
+            ("use\\s+(.*)using\\s+(.*), (clear|replace)", {2: 'use'}),
+            ("use\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {2: 'use'}),
             ("joinby\\s+(.*)using\\s+(.*),", {2: 'use'}),
             ("merge\\s+(.*)using\\s+(.*),", {2: 'use'}),
+            ("append\\s+using\\s+(.*), force", {1: 'use'}),
             ("append\\s+using\\s+(.*)", {1: 'use'}),
             ("import\\s+delimited\\s+(.*),", {1: 'use_ext'}),
             ("import\\s+excel\\s+(.*),", {1: 'use_ext'}),
@@ -73,7 +74,8 @@ class StataReader:
             ]
     patterns_local = [
             "^\\s*local\\s+(\\w[\\w0-9_]*)\\s*(?:=)?\\s?\\s*(.*)",
-            "args ([\\w_]*)"
+            "args ([\\w_]*)",
+            "^\\s*tempfile\\s+(\\w[\\w0-9_\\s]*)\\s*"
             ]
 
     def __init__(self):
@@ -236,18 +238,35 @@ class StataReader:
                 if m is None:
                     continue
                 local_name = m.group(1)
+                # For locals, get a value
                 if lpattern.find("local") != -1:
                     local_value = m.group(2)
                 else:
                     local_value = ""
-                local_value = self._replace_locals(local_value, local)
-                local_value = self.replace_globals(local_value)
-                local_value = self._replace_locals(local_value, local)
-                local_value = local_value.strip().strip("\"")
-                local[local_name] = local_value
-                if self.verbose_locals:
-                    print("Found local %s -> %s" % (local_name,
-                                                    local_value))
+
+                # Tempfiles can list several local names, but all of them will
+                # be without a value
+                # tempfile a b c d e f -> 6 locals.
+                if lpattern.find("tempfile") != -1:
+                    local_value = ""
+                    local_names = local_name.split(" ")
+                    local_names = [x.strip() for x in local_names]
+                    if "" in local_names:
+                        local_names.remove("")
+                else:
+                    local_names = [local_name]
+
+                # The iteration over lists is necessary because of tempfiles
+                for local_name in local_names:
+                    # print(f"{local_name} -> {local_value}")
+                    local_value = self._replace_locals(local_value, local)
+                    local_value = self.replace_globals(local_value)
+                    local_value = self._replace_locals(local_value, local)
+                    local_value = local_value.strip().strip("\"")
+                    local[local_name] = local_value
+                    if self.verbose_locals:
+                        print("Found local %s -> %s" % (local_name,
+                                                        local_value))
             # Check if the current line has a pattern that needs to be
             # excluded
             for pattern in self.patterns_exclude:
@@ -289,7 +308,9 @@ class StataReader:
                     pat_str = self.replace_globals(pat_str)
                     pat_str = self._replace_locals(pat_str, local)
                     pat_str = pat_str.replace(".dta", "").strip().strip("\"")
-                    self.parsed[fname][i+1+(key-1)/100] = (pat_type, pat_str)
+                    if pat_str != "":
+                        self.parsed[fname][i+1+(key-1)/100] \
+                            = (pat_type, pat_str)
 
             i += 1
 
