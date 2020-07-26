@@ -21,32 +21,40 @@ class StataReader:
     """
 
     patterns_use = [
-            ("use\\s+(.*), (clear|replace)", {1: 'use'}),
-            ("use\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {1: 'use'}),
-            ("use\\s+(.*)using\\s+(.*), (clear|replace)", {2: 'use'}),
-            ("use\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {2: 'use'}),
+            ("u(s|se)?\\s+(.*)", {2: 'use'}),
+            ("u(s|se)?\\s+(.*), (clear|replace)", {2: 'use'}),
+            ("u(s|se)?\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {2: 'use'}),
+            ("u(s|se)?\\s+(.*)using\\s+(.*), (clear|replace)", {3: 'use'}),
+            ("u(s|se)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {3: 'use'}),
+            ("sysu(s|se)?\\s+(.*)", {2: 'use'}),
+            ("sysu(s|se)?\\s+(.*), (clear|replace)", {2: 'use'}),
+            ("sysu(s|se)?\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {2: 'use'}),
+            ("sysu(s|se)?\\s+(.*)using\\s+(.*), (clear|replace)", {3: 'use'}),
+            ("sysu(s|se)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {3: 'use'}),
             ("joinby\\s+(.*)using\\s+(.*),", {2: 'use'}),
             ("merge\\s+(.*)using\\s+(.*),", {2: 'use'}),
             ("append\\s+using\\s+(.*), force", {1: 'use'}),
             ("append\\s+using\\s+(.*)", {1: 'use'}),
             ("import\\s+delimited\\s+(.*),", {1: 'use_ext'}),
             ("import\\s+excel\\s+(.*),", {1: 'use_ext'}),
+            ("insheet\\s+(.*)using\\s+(.*)", {2: 'use'}),
             ("^do\\s+(.*)(?:,)?", {1: 'do'}),
             ("\\s+do\\s+(.*)(?:,)?", {1: 'do'}),
             ("estimates use\\s+(.*)", {1: 'use'})
             ]
     patterns_save = [
-            ("save\\s+(.*)", {1: 'save'}),
-            ("save\\s+(.*),", {1: 'save'}),
+            ("sa(v|ve)?\\s+(.*)", {2: 'save'}),
+            ("sa(v|ve)?\\s+(.*),", {2: 'save'}),
             ("erase\\s+(.*)", {1: 'erase'}),
             ("copy\\s+\"(.*)\"\\s+\"(.*)\"\\s*,\\s*replace",
              {1: 'use', 2: 'save'}),
             ("tempfile\\s+(.*)", {1: 'tempfile'}),
-            ("graph\\s+export\\s+(.*), replace", {1: 'export'}),
+            ("graph\\s+export\\s+(.*), replace(.*)?", {1: 'export'}),
             ("graph\\s+export\\s+(.*),", {1: 'export'}),
             ("graph\\s+export\\s+(.*)", {1: 'export'}),
             ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
             ("esttab\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
+            ("outreg\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
             ("estimates save\\s+(.*)", {1: 'save'}),
             ("estimates save\\s+(.*),", {1: 'save'})
             ]
@@ -78,7 +86,16 @@ class StataReader:
             "^\\s*tempfile\\s+(\\w[\\w0-9_\\s]*)\\s*"
             ]
 
-    def __init__(self):
+    def __init__(self,
+                 cut_paths=False,
+                 base_folder=""):
+        """
+        cut_paths: Only use filenames as nodes for code, input and output
+                   files. This makes the display more clunky, but is necessary
+                   if file names are not unique.
+        base_folder: Folder of the Stata repository. Either set it directly or
+            use read_folder to set it automatically.
+        """
         self.patterns = self.patterns_use
         self.patterns.extend(self.patterns_save)
         self.patterns.extend(self.patterns_ado)
@@ -88,6 +105,8 @@ class StataReader:
         self.verbose_comments = False
         self.verbose_locals = False
         self.indent = "\t"
+        self.cut_paths = cut_paths
+        self.base_folder = base_folder
 
     def parse_global_file(self, fname):
         """
@@ -430,10 +449,13 @@ class StataReader:
             self.parsed[fname].pop(i)
 
     def _exp_get_do_node(self, fname):
-        return "\"%s\" [color=%s, URL=\"file:///%s\"]" % (
-                os.path.split(fname)[1],
-                self._ftype_to_color("do"),
-                fname)
+        return self._exp_get_file_node("do", fname)
+        """
+        node = self._proc_node_name(fname)
+        color = self._ftype_to_color("do")
+        fname_nonew = os.path.join(self.base_folder, fname.replace("\n", ""))
+        return f"\"{node}\" [color={color}, URL=\"file:///{fname_nonew}\"]"
+        """
 
     def _ftype_to_color(self, ftype):
         if ftype == 'cluster':
@@ -452,12 +474,12 @@ class StataReader:
             return "black"
 
     def _exp_get_file_node(self, ftype, fname):
+        node = self._proc_node_name(fname)
+        node_lbl = node.replace('/', '/\\n')
         color = self._ftype_to_color(ftype)
-
-        return "\"%s\" [color=%s, URL=\"file:///%s\"]" % (
-                os.path.split(fname)[1],
-                color,
-                fname)
+        fname_nonew = os.path.join(self.base_folder, fname.replace("\n", ""))
+        return f"\"{node}\" [color={color}, URL=\"file:///{fname_nonew}\"," \
+            + f" label=\"{node_lbl}\"]"
 
     def compile_graphviz(self, in_filename, out_filename,
                          view=True,
@@ -470,6 +492,17 @@ class StataReader:
         src = Source(file_content)
         src.render(out_filename, view=True,
                    format=render_format)
+
+    def _proc_node_name(self, fname):
+        """
+        Format the node names as configured.
+        """
+        fname = fname.replace("\\", "/")
+        fname = fname.replace(self.base_folder.replace("\\", "/"), "")
+        if self.cut_paths:
+            return os.path.split(fname)[1]
+        else:
+            return fname
 
     def export_graphviz(self, file,
                         separate_groups=False,
@@ -513,13 +546,13 @@ class StataReader:
         Get all the links to be written & write out all nodes
         """
         # Add comment: Stata Code nodes start here
-        f.write("/*\n")
-        f.write(self.indent + "Stata Code nodes\n")
-        f.write("*/\n")
+        f.write(self.indent + "/*\n")
+        f.write(self.indent + self.indent + "Stata Code nodes\n")
+        f.write(self.indent + "*/\n")
         # Define Stata Code node
         for fname in self.parsed:
             f.write(self.indent + self._exp_get_do_node(fname) + ";\n")
-            fname_node = os.path.split(fname)[1]
+            fname_node = self._proc_node_name(fname)
             file_nodes.append(fname_node)
             file_node_types.append(".do")
         f.write("\n")
@@ -529,10 +562,10 @@ class StataReader:
         # Since both lists may be modified by subsequent options, do not
         # write them out, yet
         for fname in self.parsed:
-            fname_node = os.path.split(fname)[1]
+            fname_node = self._proc_node_name(fname)
             for i in sorted(self.parsed[fname].keys()):
                 t = self.parsed[fname][i]
-                fname_node2 = os.path.split(t[1])[1]
+                fname_node2 = self._proc_node_name(t[1])
 
                 # Check if the node is to be disregarded.
                 if fname_node2 in self.disregarded_nodes:
@@ -623,7 +656,7 @@ class StataReader:
                                     file_links[i] = (file_links[i][0],
                                                      cluster_name)
 
-                    f.write("subgraph cluster_%s_%s {\n"
+                    f.write("subgraph \"cluster_%s_%s\" {\n"
                             % (cluster.replace(".", "_"), cluster_type))
                     if separate_groups:
                         f.write(self.indent
@@ -655,11 +688,11 @@ class StataReader:
                                 idx_fl = 0
                                 while idx_fl < len(file_links):
                                     if file_links[idx_fl][1] \
-                                      == groups[cluster][idx+1]:
+                                            == groups[cluster][idx+1]:
                                         file_links.pop(idx_fl)
                                         continue
                                     if file_links[idx_fl][0] \
-                                      == groups[cluster][idx]:
+                                            == groups[cluster][idx]:
                                         file_links.pop(idx_fl)
                                         continue
                                     idx_fl += 1
@@ -667,7 +700,6 @@ class StataReader:
                                 break
                             idx += 1
                         idx += 1
-
 
                     f.write(self.indent + "graph[style=dotted];\n")
                     f.write("}\n")
@@ -685,9 +717,9 @@ class StataReader:
         """
         Write the input/output nodes into the output file
         """
-        f.write("/*\n")
-        f.write("\tInput / Output file nodes\n")
-        f.write("*/\n")
+        f.write(self.indent + "/*\n")
+        f.write(self.indent + self.indent + "Input / Output file nodes\n")
+        f.write(self.indent + "*/\n")
         for i in range(len(file_nodes)):
             if file_node_types[i] == ".do":
                 continue
@@ -696,9 +728,9 @@ class StataReader:
                                               file_nodes[i]) + ";\n")
 
         # Add comment: Input / Output relationships start here
-        f.write("/*\n")
-        f.write(self.indent + "Input/Output relationships\n")
-        f.write("*/\n")
+        f.write(self.indent + "/*\n")
+        f.write(self.indent + self.indent + "Input/Output relationships\n")
+        f.write(self.indent + "*/\n")
         # Write out code lines
         i = 0
         while i < len(file_links):
@@ -717,7 +749,7 @@ class StataReader:
                     j -= 1
                 j += 1
 
-            fname_node2 = os.path.split(t[1])[1]
+            fname_node2 = self._proc_node_name(t[1])
 
             if has_backward is False:
                 f.write(self.indent
@@ -739,14 +771,27 @@ class StataReader:
         if f_opened:
             f.close()
 
-    def read_folder(self, folder, exclude=[]):
+    def read_folder(self, folder, exclude=[],
+                    walk=False):
+        """
+        Read a directory and parse all .do files that are encountered.
+
+        walk: read subdirs as well.
+        """
         for file in os.scandir(folder):
             file_name = file.name
             if file_name in exclude:
                 continue
-            if os.path.splitext(file_name)[1] == ".do":
+            if file.is_file() and os.path.splitext(file_name)[1] == ".do":
                 print("Reading Stata file %s" % file_name)
-                self.read_stata(os.path.join(folder, file_name))
+                self.read_stata(os.path.join(folder, file_name),
+                                )
+            elif file.is_dir() and walk:
+                self.read_folder(os.path.join(folder, file_name),
+                                 walk=True)
+
+        # This needs to be at the end to set it at the last recursion.
+        self.base_folder = folder
 
     def get_dta_files(self):
         """

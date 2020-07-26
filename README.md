@@ -25,16 +25,13 @@ You'll need Python to run the script.
 Put this Code to the same folder as the other examples.
 
 ```python
-import os
 import sys
 sys.path.append("../")
 from StataReader import StataReader
 
 reader = StataReader()
 
-# Include all files from your project
-for file in os.scandir("/path/to/your/Stata/folder/"):
-    reader.read_stata(file)
+reader.read_folder("stata_example/")
 
 # These files will not be shown in the flowchart.
 # Use this for files that are used very often or are irrelevant.
@@ -44,8 +41,9 @@ for node in ignore_nodes:
 
 # Create the flowchart
 reader.export_graphviz("flowchart.viz")
-reader.compile_graphviz("flowchart.viz", "flowchart",
-                        render_format="png")
+reader.compile_graphviz("flowchart.viz",
+                        "flowchart",
+                        render_format='png')
 ```
 
 

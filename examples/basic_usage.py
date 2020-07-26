@@ -4,18 +4,13 @@ Created on Tue Jul 14 16:57:20 2020
 
 @author: Poef
 """
-import os
 import sys
 sys.path.append("../")
 from StataReader import StataReader
 
 reader = StataReader()
 
-# Include all files from your project
-for file in os.scandir("stata_example/"):
-    if file.is_file() and os.path.splitext(file.name)[1] == ".do":
-        print(f"Adding file {file.name}")
-        reader.read_stata(file)
+reader.read_folder("stata_example/")
 
 # These files will not be shown in the flowchart.
 # Use this for files that are used very often or are irrelevant.
