@@ -22,18 +22,18 @@ class StataReader:
 
     patterns_use = [
             ("u(s|se)?\\s+(.*)", {2: 'use'}),
-            ("u(s|se)?\\s+(.*), (clear|replace)", {2: 'use'}),
-            ("u(s|se)?\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {2: 'use'}),
-            ("u(s|se)?\\s+(.*)using\\s+(.*), (clear|replace)", {3: 'use'}),
+            ("u(s|se)?\\s+(.*),\\s*(keep|clear|replace)", {2: 'use'}),
+            ("u(s|se)?\\s+(.*)\\s+if\\s*(.*),\\s*(clear|replace)", {2: 'use'}),
+            ("u(s|se)?\\s+(.*)using\\s+(.*),\\s*(clear|replace)", {3: 'use'}),
             ("u(s|se)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {3: 'use'}),
             ("sysu(s|se)?\\s+(.*)", {2: 'use'}),
             ("sysu(s|se)?\\s+(.*), (clear|replace)", {2: 'use'}),
-            ("sysu(s|se)?\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {2: 'use'}),
-            ("sysu(s|se)?\\s+(.*)using\\s+(.*), (clear|replace)", {3: 'use'}),
+            ("sysu(s|se)?\\s+(.*)\\s+if\\s*(.*),\\s*(clear|replace)", {2: 'use'}),
+            ("sysu(s|se)?\\s+(.*)using\\s+(.*),\\s*(clear|replace)", {3: 'use'}),
             ("sysu(s|se)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {3: 'use'}),
             ("joinby\\s+(.*)using\\s+(.*),", {2: 'use'}),
             ("merge\\s+(.*)using\\s+(.*),", {2: 'use'}),
-            ("append\\s+using\\s+(.*), force", {1: 'use'}),
+            ("append\\s+using\\s+(.*),\\s*(keep|force)", {1: 'use'}),
             ("append\\s+using\\s+(.*)", {1: 'use'}),
             ("import\\s+delimited\\s+(.*),", {1: 'use_ext'}),
             ("import\\s+excel\\s+(.*),", {1: 'use_ext'}),
@@ -319,6 +319,10 @@ class StataReader:
                         pass
                     elif "noisily".startswith(line_starts):
                         pass
+                    elif "capture".startswith(line_starts):
+                        pass
+                    elif "noisily".startswith(line_starts):
+                        pass
                     else:
                         print(f"Before pattern: {line_starts}")
                         continue
@@ -450,12 +454,6 @@ class StataReader:
 
     def _exp_get_do_node(self, fname):
         return self._exp_get_file_node("do", fname)
-        """
-        node = self._proc_node_name(fname)
-        color = self._ftype_to_color("do")
-        fname_nonew = os.path.join(self.base_folder, fname.replace("\n", ""))
-        return f"\"{node}\" [color={color}, URL=\"file:///{fname_nonew}\"]"
-        """
 
     def _ftype_to_color(self, ftype):
         if ftype == 'cluster':
@@ -617,6 +615,9 @@ class StataReader:
                     if file_for_node not in groups:
                         groups[file_for_node] = []
                     if len(set(file_cluster_usage[node])) == 1:
+                        if node not in file_cluster_nodetypes:
+                            print(f" >>> Error: {node} not contained")
+                            print(file_cluster_nodetypes)
                         if file_cluster_nodetypes[node] == cluster_type:
                             groups[file_for_node].append(node)
 
