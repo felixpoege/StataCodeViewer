@@ -21,11 +21,12 @@ class StataReader:
     """
 
     patterns_use = [
-            ("u(s|se)?\\s+(.*)", {2: 'use'}),
-            ("u(s|se)?\\s+(.*),\\s*(keep|clear|replace)", {2: 'use'}),
-            ("u(s|se)?\\s+(.*)\\s+if\\s*(.*),\\s*(clear|replace)", {2: 'use'}),
-            ("u(s|se)?\\s+(.*)using\\s+(.*),\\s*(clear|replace)", {3: 'use'}),
-            ("u(s|se)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {3: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*)", {3: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*)using\\s*(.*)", {4: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*),\\s*(keep|clear|replace)", {3: 'use'}),
+            # ("u(s|se)?(old)?\\s+(.*)\\s+if\\s*(.*)using\\s+(.*),\\s*(clear|replace)", {5: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*),\\s*(clear|replace)", {4: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*),\\s*(clear|replace)", {4: 'use'}),
             ("sysu(s|se)?\\s+(.*)", {2: 'use'}),
             ("sysu(s|se)?\\s+(.*), (clear|replace)", {2: 'use'}),
             ("sysu(s|se)?\\s+(.*)\\s+if\\s*(.*),\\s*(clear|replace)", {2: 'use'}),
@@ -36,6 +37,7 @@ class StataReader:
             ("append\\s+using\\s+(.*),\\s*(keep|force)", {1: 'use'}),
             ("append\\s+using\\s+(.*)", {1: 'use'}),
             ("import\\s+delimited\\s+(.*),", {1: 'use_ext'}),
+            ("import\\s+delimited\\s+(.*)using(.*),", {2: 'use_ext'}),
             ("import\\s+excel\\s+(.*),", {1: 'use_ext'}),
             ("insheet\\s+(.*)using\\s+(.*)", {2: 'use'}),
             ("^do\\s+(.*)(?:,)?", {1: 'do'}),
@@ -43,8 +45,8 @@ class StataReader:
             ("estimates use\\s+(.*)", {1: 'use'})
             ]
     patterns_save = [
-            ("sa(v|ve)?\\s+(.*)", {2: 'save'}),
-            ("sa(v|ve)?\\s+(.*),", {2: 'save'}),
+            ("sa(v|ve)?(old)?\\s+(.*)", {3: 'save'}),
+            ("sa(v|ve)?(old)?\\s+(.*),", {3: 'save'}),
             ("erase\\s+(.*)", {1: 'erase'}),
             ("copy\\s+\"(.*)\"\\s+\"(.*)\"\\s*,\\s*replace",
              {1: 'use', 2: 'save'}),
@@ -56,7 +58,10 @@ class StataReader:
             ("esttab\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
             ("outreg\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
             ("estimates save\\s+(.*)", {1: 'save'}),
-            ("estimates save\\s+(.*),", {1: 'save'})
+            ("estimates save\\s+(.*),", {1: 'save'}),
+            ("export\\s+delimited\\s+(.*),", {1: 'export'}),
+            ("export\\s+delimited\\s+(.*)\\s*using(.*),", {2: 'export'}),
+            ("export\\s+delimited\\s+(.*)\\s*using(.*)", {2: 'export'}),
             ]
 
     patterns_exclude = [
@@ -137,10 +142,25 @@ class StataReader:
 
     def replace_globals(self, instr):
         for glob in sorted(self.globals.keys(), key=len, reverse=True):
+            # Global replacement with curved brackets
             instr = instr.replace("${" + glob + "}", self.globals[glob])
+            # Global replacement without curved bracket surrounding the global
+            # name.
+            instr = re.sub("\\$" + glob + "([ /])",
+                           self.globals[glob] + "\\1",
+                           instr)
         return instr
 
-    def read_stata(self, fname, local=None):
+    def read_stata(self, fname, local=None,
+                   skip_globals=False):
+        """
+        Load and parse Stata file.
+
+        skip_globals: Do not parse globals in the Stata file.
+        """
+        if not skip_globals:
+            self.parse_global_file(fname)
+
         print("Processing %s" % os.path.split(fname)[-1])
         with open(fname, "r") as f:
             lines = f.readlines()
@@ -323,6 +343,12 @@ class StataReader:
                         pass
                     elif "noisily".startswith(line_starts):
                         pass
+                    elif line_starts.startswith("if "):
+                        if line_starts.endswith("graph"):
+                            print(f"Before pattern: {line_starts}")
+                            continue
+                        print(f"'if' line start: {line_starts}")
+                        pass
                     else:
                         print(f"Before pattern: {line_starts}")
                         continue
@@ -349,12 +375,19 @@ class StataReader:
 
             i += 1
 
-    def _replace_locals(self, s, local):
+        if fname not in self.parsed:
+            self.parsed[fname] = {}
+
+    def _replace_locals(self, s, local,
+                        _rec_depth=0):
         """
         Replace locals in a string.
 
         local is a dictionary of local -> replacement combintions.
         """
+        if _rec_depth > 10:
+            print(f"Warning: High recursion depth on _replace_locals: {s}")
+            return s
         if local is None:
             return s
         if s.find("`") == -1:
@@ -362,12 +395,21 @@ class StataReader:
         s_prev = s
         for local_key in local.keys():
             local_from = "`" + local_key + "'"
-            local_to = local[local_key]
-            s = s.replace(local_from, local_to)
+            if s.find(local_from) != -1:
+                local_to = local[local_key]
+                """
+                If a local is contained in the same local, this recursion can
+                break the local replacement routine. This happens for example
+                in loops in Stata code in the wild.
+                """
+                local_to = local_to.replace(local_from,
+                                            "<removed recursive local>")
+                s = s.replace(local_from, local_to)
         if s != s_prev:
             if self.verbose_locals:
                 print("Replaced local: %s -> %s" % (s_prev, s))
-            return self._replace_locals(s, local)
+            return self._replace_locals(s, local,
+                                        _rec_depth=_rec_depth+1)
         else:
             return s
 
@@ -375,6 +417,7 @@ class StataReader:
         """
         Do postprocessing:
             - Replace \\ by /
+            - Replace // by / (filenames)
             - When a file is
             d, remove it from what happened before
              (+ some checks)
@@ -388,11 +431,13 @@ class StataReader:
                                                                 local))
 
         # Replace \ by /
+        # Replace // by / (filenames)
         for i in sorted(self.parsed[fname].keys()):
             t = self.parsed[fname][i]
             self.parsed[fname][i] = (t[0], t[1].replace("\\\\", "/")
                                                .replace("\\", "/")
-                                               .replace("\"", ""))
+                                               .replace("\"", "")
+                                               .replace("//", "/"))
 
         # If a file is first saved and then used, disregard the 'use'
         # part (as it happens within the same file)
@@ -780,16 +825,21 @@ class StataReader:
         walk: read subdirs as well.
         """
         for file in os.scandir(folder):
-            file_name = file.name
+            file_name = str(file.name)
             if file_name in exclude:
+                print(f"Excluded file: '{file_name}'")
                 continue
             if file.is_file() and os.path.splitext(file_name)[1] == ".do":
-                print("Reading Stata file %s" % file_name)
+                print(f"Reading Stata file '{file_name}'")
                 self.read_stata(os.path.join(folder, file_name),
                                 )
             elif file.is_dir() and walk:
                 self.read_folder(os.path.join(folder, file_name),
-                                 walk=True)
+                                 walk=True,
+                                 exclude=exclude)
+            else:
+                pass
+                # print(f"Unknown file: '{file_name}'")
 
         # This needs to be at the end to set it at the last recursion.
         self.base_folder = folder
