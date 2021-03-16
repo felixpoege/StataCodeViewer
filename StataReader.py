@@ -12,6 +12,7 @@ Required libraries:
 import re
 import os
 import sys
+import math
 from graphviz import Source
 
 
@@ -35,7 +36,7 @@ class StataReader:
             ("joinby\\s+(.*)using\\s+(.*),", {2: 'use'}),
             ("merge\\s+(.*)using\\s+(.*)", {2: 'use'}),
             ("merge\\s+(.*)using\\s+(.*),", {2: 'use'}),
-            ("append\\s+using\\s+(.*),\\s*(keep|force)", {1: 'use'}),
+            ("append\\s+using\\s+(.*),\\s*(keep|force|gen)", {1: 'use'}),
             ("append\\s+using\\s+(.*)", {1: 'use'}),
             ("import\\s+delimited\\s+(.*)", {1: 'use_ext'}),
             ("import\\s+delimited\\s+(.*),", {1: 'use_ext'}),
@@ -86,8 +87,8 @@ class StataReader:
           5: 'save', 6: 'save', 7: 'save', 8: 'export'})
             ]
     patterns_global = [
-            "global (.*)=(.*)",
-            "global (.*) (.*)"
+            "global (.*?)=(.*)",
+            "global (.*?) (.*)"
             ]
     patterns_local = [
             "^\\s*local\\s+(\\w[\\w0-9_]*)\\s*(?:=)?\\s?\\s*(.*)",
@@ -178,10 +179,26 @@ class StataReader:
     def set_verbose_locals(self, verbose_locals):
         self.verbose_locals = verbose_locals
 
+    def _split_stata_namelist(self, namelist):
+        return re.split("\\s+", namelist)
+
+    def _split_stata_numlist(self, numlist):
+        numlist = numlist.strip()
+        m1 = re.match("([0-9\\-]+)/([0-9\\-]+)", numlist)
+        if m1:
+            int1 = int(m1.group(1))
+            int2 = int(m1.group(2))
+            assert int2 > int1
+            return [x for x in range(int1, int2+1)]
+        else:
+            raise ValueError(f"Unknown numlist {numlist}")
+
     def parse_stata(self, fname, lines, local=None):
 
         if local is None:
             local = {}
+
+        bracket_level = 0
 
         n_multiline_comment = 0
         i = 0
@@ -274,7 +291,48 @@ class StataReader:
             if slashpos != -1:
                 line = line[:slashpos]
 
+            # =================================================================
+            # Handle brackets, loops and conditions (start)
+            # =================================================================
+            if line.strip().startswith("foreach"):
+
+                m1 = re.search("foreach\\s+(.*)\\s+in\\s+(.*)\\s+\\{", line)
+                m2 = "foreach\\s+(.*)\\s+of\\s+varlist\\s+(.*)\\s+\\{"
+                m2 = re.search(m2, line)
+                m3 = "foreach\\s+(.*)\\s+of\\s+local\\s+(.*)\\s+\\{"
+                m3 = re.search(m3, line)
+                m3g = "foreach\\s+(.*)\\s+of\\s+global\\s+(.*)\\s+\\{"
+                m3g = re.search(m3g, line)
+                m4 = "foreach\\s+(.*)\\s+of\\s+numlist\\s+(.*)\\s+\\{"
+                m4 = re.search(m4, line)
+                if m1 is not None:
+                    lcl_name = m1.group(1)
+                    lcl_vals = self._split_stata_namelist(m1.group(2))
+                    local[lcl_name] = {
+                            'bracket_level': bracket_level+1,
+                            'local_values': lcl_vals
+                            }
+                    bracket_level += 1
+                elif m2 is not None:
+                    bracket_level += 1
+                elif m3 is not None:
+                    bracket_level += 1
+                elif m3g is not None:
+                    bracket_level += 1
+                elif m4 is not None:
+                    lcl_name = m4.group(1)
+                    lcl_vals = self._split_stata_numlist(m4.group(2))
+                    local[lcl_name] = {
+                            'bracket_level': bracket_level+1,
+                            'local_values': lcl_vals
+                            }
+                    bracket_level += 1
+                else:
+                    raise ValueError(f"Unknown foreach loop: {line}")
+
+            # =================================================================
             # Iterate over locals and see if something can be found
+            # =================================================================
             for lpattern in self.patterns_local:
                 pat = re.compile(lpattern)
                 m = pat.search(line)
@@ -382,6 +440,57 @@ class StataReader:
         if fname not in self.parsed:
             self.parsed[fname] = {}
 
+        self._expand_parsed()
+
+    def _max_key_by_floor(self, key_list, key_floor):
+        max_key = -1
+        for key in key_list:
+            if math.floor(key) == key_floor:
+                if key > max_key:
+                    max_key = key
+        return max_key
+
+    def _expand_parsed(self):
+        """
+        Files of the form [[x|y|z]] were created by the expansion of locals
+        from loops. This function does the post-processing of reverting
+        this pattern back to a set of files.
+        """
+        for node in self.parsed.keys():
+
+            entry_pop = []
+            content_keys = list(self.parsed[node].keys())
+            for entry in content_keys:
+                action, file = self.parsed[node][entry]
+                m = re.search("\\[\\[(.*?)\\]\\]", file)
+                if m:
+                    print(file)
+                    # Make sure that there was only one pattern in the local
+                    # TODO: If an error pops up, implement a better check.
+                    assert m.group(1).find("[[") == -1
+                    assert m.group(1).find("]]") == -1
+
+                    patterns = re.split("\\|", m.group(1))
+                    for pattern in patterns:
+                        file_new = re.sub("\\[\\[(.*)\\]\\]", pattern, file)
+
+                        # Generate a new key at this level (maximum key + .1)
+                        # Insert it into the list
+                        max_key = self._max_key_by_floor(
+                                self.parsed[node].keys(),
+                                math.floor(entry))
+                        assert max_key != -1
+                        self.parsed[node][max_key + .1] = (action, file_new)
+
+                    # Mark the current entry for removal
+                    entry_pop.append(entry)
+
+            # Remove all expanded entries
+            for entry in entry_pop:
+                self.parsed[node].pop(entry)
+
+
+
     def _replace_locals(self, s, local,
                         _rec_depth=0):
         """
@@ -401,6 +510,14 @@ class StataReader:
             local_from = "`" + local_key + "'"
             if s.find(local_from) != -1:
                 local_to = local[local_key]
+
+                """
+                Handle cases where multiple options are available through loops
+                """
+                if type(local_to) is dict:
+                    local_to = '|'.join(local_to['local_values'])
+                    local_to = '[[' + local_to + ']]'
+
                 """
                 If a local is contained in the same local, this recursion can
                 break the local replacement routine. This happens for example
