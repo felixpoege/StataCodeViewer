@@ -47,7 +47,8 @@ class StataReader:
             ("insheet\\s+(.*)using\\s+(.*)", {2: 'use'}),
             ("^do\\s+(.*)(?:,)?", {1: 'do'}),
             ("\\s+do\\s+(.*)(?:,)?", {1: 'do'}),
-            ("estimates use\\s+(.*)", {1: 'use'})
+            ("estimates use\\s+(.*)", {1: 'use'}),
+            ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),(.*?)read", {2: 'export'}),
             ]
     patterns_save = [
             ("sa(v|ve)?(old)?\\s+(.*)", {3: 'save'}),
@@ -59,7 +60,7 @@ class StataReader:
             ("graph\\s+export\\s+(.*), replace(.*)?", {1: 'export'}),
             ("graph\\s+export\\s+(.*),", {1: 'export'}),
             ("graph\\s+export\\s+(.*)", {1: 'export'}),
-            ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
+            ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),(.*?)write", {2: 'export'}),
             ("esttab\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
             ("outreg\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
             ("estimates save\\s+(.*)", {1: 'save'}),
@@ -984,17 +985,11 @@ class StataReader:
                         dta_files[node[1]] = [file]
         return dta_files
 
-    def create_master_file(self):
+    def _execution_graph(self):
         """
-        Create master.do file.
-        Return list of Stata lines detailing:
-            - Input files (as comments in the first rows)
-            - Proposed execution order for code files.
-        The method will fail if cyclical execution patterns are present in the
-        code base.
+        Auxiliary method doing the heavy lifting for create_master_file.
         """
         g = nx.DiGraph()
-
         file_nodes = {}
 
         # Go through linkages within the scanned code base.
@@ -1013,6 +1008,10 @@ class StataReader:
                 if action == 'do':
                     continue
 
+                if file in self.disregarded_nodes:
+                    print(f"Warning: Disregarded node {file}")
+                    continue
+
                 if file not in file_nodes:
                     file_nodes[file] = {
                             'creator': None,
@@ -1021,7 +1020,17 @@ class StataReader:
 
                 # External usage
                 if action in ['use', 'use_ext']:
-                    file_nodes[file]['users'].append(node)
+                    # If the file itself is already set as creator, then
+                    # the file is allowed to use the output without creating
+                    # a loop.
+                    # Without this check, there would be cycles in script:
+                    # save A.dta
+                    # use A.dta
+                    # save B.dta
+                    if node != file_nodes[file]['creator']:
+                        file_nodes[file]['users'].append(node)
+                    else:
+                        print(f"Info: Node {node} saves and uses file {file}")
                 # Saving / Exporting
                 elif action in ['save', 'export']:
                     if file_nodes[file]['creator'] is not None:
@@ -1047,8 +1056,27 @@ class StataReader:
             for user in content['users']:
                 g.add_edge(content['creator'], user)
 
+        return g, input_files
+
+
+    def create_master_file(self):
+        """
+        Create master.do file.
+        Return list of Stata lines detailing:
+            - Input files (as comments in the first rows)
+            - Proposed execution order for code files.
+        The method will fail if cyclical execution patterns are present in the
+        code base.
+        """
+        g, input_files = self._execution_graph()
+
         # Check that no cycles are present
-        assert nx.is_directed_acyclic_graph(g)
+        if not nx.is_directed_acyclic_graph(g):
+            cycles = nx.cycles.find_cycle(g)
+            print("ERROR: Execution graph is not DAG!")
+            print("Cycles:")
+            print(cycles)
+            raise AssertionError("Execution graph is not DAG")
 
         # Create the output: First, detected input files. Then, proposed
         # execution order.
