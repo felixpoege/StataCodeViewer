@@ -13,6 +13,7 @@ import re
 import os
 import sys
 import math
+import networkx as nx
 from graphviz import Source
 
 
@@ -982,3 +983,80 @@ class StataReader:
                     else:
                         dta_files[node[1]] = [file]
         return dta_files
+
+    def create_master_file(self):
+        """
+        Create master.do file.
+        Return list of Stata lines detailing:
+            - Input files (as comments in the first rows)
+            - Proposed execution order for code files.
+        The method will fail if cyclical execution patterns are present in the
+        code base.
+        """
+        g = nx.DiGraph()
+
+        file_nodes = {}
+
+        # Go through linkages within the scanned code base.
+        # For every data file, save the file that creates it and all the files
+        # that use it.
+        # In the final graph, nodes will be Stata code files.
+        for node in self.parsed.keys():
+            if node not in g.nodes:
+                g.add_node(node)
+
+            content = self.parsed[node]
+            for entry in content.keys():
+                action, file = content[entry]
+
+                # IF a file directly executes another file, ignore it for now.
+                if action == 'do':
+                    continue
+
+                if file not in file_nodes:
+                    file_nodes[file] = {
+                            'creator': None,
+                            'users': []
+                            }
+
+                # External usage
+                if action in ['use', 'use_ext']:
+                    file_nodes[file]['users'].append(node)
+                # Saving / Exporting
+                elif action in ['save', 'export']:
+                    if file_nodes[file]['creator'] is not None:
+                        if file_nodes[file]['creator'] != node:
+                            print(f"ERROR: creator of {file} already set!")
+                    file_nodes[file]['creator'] = node
+                # Not implemented error
+                else:
+                    raise ValueError(f"Unknown file action {action}")
+
+        # Input files are such that are not created by any file.
+        # Directed links are created between Stata code files creating a
+        # data files and Stata code files using the file.
+        input_files = []
+        for file in file_nodes.keys():
+            content = file_nodes[file]
+
+            if content['creator'] is None:
+                if file not in input_files:
+                    input_files.append(file)
+                continue
+
+            for user in content['users']:
+                g.add_edge(content['creator'], user)
+
+        # Check that no cycles are present
+        assert nx.is_directed_acyclic_graph(g)
+
+        # Create the output: First, detected input files. Then, proposed
+        # execution order.
+        master_do = []
+        for input_file in sorted(input_files):
+            input_file = input_file.replace("\\", "/")
+            master_do.append(f"// Requires input file {input_file}\n")
+        for node in nx.topological_sort(g):
+            node = node.replace("\\", "/")
+            master_do.append(f'do "{node}"\n')
+        return master_do
