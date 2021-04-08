@@ -37,6 +37,7 @@ class StataReader:
             ("joinby\\s+(.*)using\\s+(.*),", {2: 'use'}),
             ("merge\\s+(.*)using\\s+(.*)", {2: 'use'}),
             ("merge\\s+(.*)using\\s+(.*),", {2: 'use'}),
+            ("reclink[2]?\\s+(.*)using\\s+(.*),", {2: 'use'}),
             ("append\\s+using\\s+(.*),\\s*(keep|force|gen)", {1: 'use'}),
             ("append\\s+using\\s+(.*)", {1: 'use'}),
             ("import\\s+delimited\\s+(.*)", {1: 'use_ext'}),
@@ -48,7 +49,7 @@ class StataReader:
             ("^do\\s+(.*)(?:,)?", {1: 'do'}),
             ("\\s+do\\s+(.*)(?:,)?", {1: 'do'}),
             ("estimates use\\s+(.*)", {1: 'use'}),
-            ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),(.*?)read", {2: 'export'}),
+            ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),(.*?)read", {2: 'use_ext'}),
             ]
     patterns_save = [
             ("sa(v|ve)?(old)?\\s+(.*)", {3: 'save'}),
@@ -65,10 +66,10 @@ class StataReader:
             ("outreg\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
             ("estimates save\\s+(.*)", {1: 'save'}),
             ("estimates save\\s+(.*),", {1: 'save'}),
-            ("export\\s+delimited\\s+(.*)", {1: 'export'}),
-            ("export\\s+delimited\\s+(.*),", {1: 'export'}),
-            ("export\\s+delimited\\s+(.*)\\s*using(.*),", {2: 'export'}),
-            ("export\\s+delimited\\s+(.*)\\s*using(.*)", {2: 'export'}),
+            ("export\\s+(delimited|excel)\\s+(.*)", {2: 'export'}),
+            ("export\\s+(delimited|excel)\\s+(.*),", {2: 'export'}),
+            ("export\\s+(delimited|excel)\\s+(.*)\\s*using(.*),", {3: 'export'}),
+            ("export\\s+(delimited|excel)\\s+(.*)\\s*using(.*)", {3: 'export'}),
             ]
 
     patterns_exclude = [
@@ -89,8 +90,8 @@ class StataReader:
           5: 'save', 6: 'save', 7: 'save', 8: 'export'})
             ]
     patterns_global = [
-            "global (.*?)=(.*)",
-            "global (.*?) (.*)"
+            "^\\s*global (.*?)=(.*)",
+            "^\\s*global (.*?) (.*)"
             ]
     patterns_local = [
             "^\\s*local\\s+(\\w[\\w0-9_]*)\\s*(?:=)?\\s?\\s*(.*)",
@@ -165,6 +166,8 @@ class StataReader:
 
         skip_globals: Do not parse globals in the Stata file.
         """
+        fname = fname.replace("\\", "/")
+
         if not skip_globals:
             self.parse_global_file(fname)
 
@@ -190,10 +193,14 @@ class StataReader:
         if m1:
             int1 = int(m1.group(1))
             int2 = int(m1.group(2))
-            assert int2 > int1
-            return [x for x in range(int1, int2+1)]
+            if int1 == int2:
+                return [int1]
+            else:
+                assert int2 > int1
+                return [x for x in range(int1, int2+1)]
         else:
-            raise ValueError(f"Unknown numlist {numlist}")
+            print(f"Warning: Cannot parse numlist {numlist}")
+            return []
 
     def parse_stata(self, fname, lines, local=None):
 
@@ -324,13 +331,29 @@ class StataReader:
                 elif m4 is not None:
                     lcl_name = m4.group(1)
                     lcl_vals = self._split_stata_numlist(m4.group(2))
-                    local[lcl_name] = {
-                            'bracket_level': bracket_level+1,
-                            'local_values': lcl_vals
-                            }
+                    if len(lcl_vals) > 0:
+                        lcl_vals = [str(x) for x in lcl_vals]
+                        local[lcl_name] = {
+                                'bracket_level': bracket_level+1,
+                                'local_values': lcl_vals
+                                }
                     bracket_level += 1
                 else:
                     raise ValueError(f"Unknown foreach loop: {line}")
+
+            if line.strip().startswith("forvalues"):
+                m1 = "forvalues\\s+(.*)\\s+=\\s+(.*)\\s+\\{"
+                m1 = re.search(m1, line)
+                if m1 is not None:
+                    lcl_name = m1.group(1)
+                    lcl_vals = self._split_stata_numlist(m1.group(2))
+                    lcl_vals = [str(x) for x in lcl_vals]
+                    if len(lcl_vals) > 0:
+                        local[lcl_name] = {
+                                'bracket_level': bracket_level+1,
+                                'local_values': lcl_vals
+                                }
+                    bracket_level += 1
 
             # =================================================================
             # Iterate over locals and see if something can be found
@@ -452,6 +475,41 @@ class StataReader:
                     max_key = key
         return max_key
 
+    def _expand_filename(self, filename, verbose=False):
+        """
+        Files of the form [[x|y|z]] were created by the expansion of locals
+        from loops.
+        """
+        files_new = []
+        m = re.search("\\[\\[(.*?)\\]\\]", filename)
+        if m:
+            print(filename)
+            if verbose:
+                print(f"--> Pattern: {m.group(0)}")
+            # Make sure that there was only one pattern in the local
+            # TODO: If an error pops up, implement a better check.
+            assert m.group(1).find("[[") == -1
+            assert m.group(1).find("]]") == -1
+
+            new_patterns = re.split("\\|", m.group(1))
+            for new_pattern in new_patterns:
+                file_new = filename.replace(m.group(0), new_pattern)
+                files_new.append(file_new)
+
+            if verbose:
+                print("New files now:")
+                print(files_new)
+
+            # Recurse over files already processed to make sure no pattern
+            # was missed
+            files_new_rec = []
+            for new_file in files_new:
+                files_new2 = self._expand_filename(new_file)
+                files_new_rec.extend(files_new2)
+            return files_new_rec
+        else:
+            return [filename]
+
     def _expand_parsed(self):
         """
         Files of the form [[x|y|z]] were created by the expansion of locals
@@ -464,34 +522,23 @@ class StataReader:
             content_keys = list(self.parsed[node].keys())
             for entry in content_keys:
                 action, file = self.parsed[node][entry]
-                m = re.search("\\[\\[(.*?)\\]\\]", file)
-                if m:
-                    print(file)
-                    # Make sure that there was only one pattern in the local
-                    # TODO: If an error pops up, implement a better check.
-                    assert m.group(1).find("[[") == -1
-                    assert m.group(1).find("]]") == -1
 
-                    patterns = re.split("\\|", m.group(1))
-                    for pattern in patterns:
-                        file_new = re.sub("\\[\\[(.*)\\]\\]", pattern, file)
+                files_new = self._expand_filename(file)
+                for file_new in files_new:
+                    # Generate a new key at this level (maximum key + .001)
+                    # Insert it into the list
+                    max_key = self._max_key_by_floor(
+                            self.parsed[node].keys(),
+                            math.floor(entry))
+                    assert max_key != -1
+                    self.parsed[node][max_key + .001] = (action, file_new)
 
-                        # Generate a new key at this level (maximum key + .1)
-                        # Insert it into the list
-                        max_key = self._max_key_by_floor(
-                                self.parsed[node].keys(),
-                                math.floor(entry))
-                        assert max_key != -1
-                        self.parsed[node][max_key + .1] = (action, file_new)
-
-                    # Mark the current entry for removal
-                    entry_pop.append(entry)
+                # Mark the current entry for removal
+                entry_pop.append(entry)
 
             # Remove all expanded entries
             for entry in entry_pop:
                 self.parsed[node].pop(entry)
-
-
 
     def _replace_locals(self, s, local,
                         _rec_depth=0):
@@ -649,7 +696,11 @@ class StataReader:
 
     def compile_graphviz(self, in_filename, out_filename,
                          view=True,
+                         cleanup=True,
                          render_format='pdf'):
+        """
+        Cleanup: Remove the intermediate file and the input .viz file.
+        """
         print("Compile graphviz content in %s" % in_filename)
         with open(in_filename, "r") as f:
             file_content = f.readlines()
@@ -658,6 +709,10 @@ class StataReader:
         src = Source(file_content)
         src.render(out_filename, view=True,
                    format=render_format)
+
+        if cleanup:
+            os.remove(in_filename)
+            os.remove(out_filename)
 
     def _proc_node_name(self, fname):
         """
@@ -729,6 +784,11 @@ class StataReader:
         # write them out, yet
         for fname in self.parsed:
             fname_node = self._proc_node_name(fname)
+
+            # Check if the node is to be disregarded.
+            if fname_node in self.disregarded_nodes:
+                continue
+
             for i in sorted(self.parsed[fname].keys()):
                 t = self.parsed[fname][i]
                 fname_node2 = self._proc_node_name(t[1])
@@ -945,6 +1005,7 @@ class StataReader:
         """
         Read a directory and parse all .do files that are encountered.
 
+        exclude: Ignore files with these names.
         walk: read subdirs as well.
         """
         for file in os.scandir(folder):
@@ -1045,6 +1106,9 @@ class StataReader:
         # Directed links are created between Stata code files creating a
         # data files and Stata code files using the file.
         input_files = []
+        # Output files are such that are instead created at any point during
+        # the execution.
+        output_files = []
         for file in file_nodes.keys():
             content = file_nodes[file]
 
@@ -1052,11 +1116,24 @@ class StataReader:
                 if file not in input_files:
                     input_files.append(file)
                 continue
+            else:
+                if file not in output_files:
+                    output_files.append(file)
 
             for user in content['users']:
                 g.add_edge(content['creator'], user)
 
-        return g, input_files
+        # Make sure that input and output files do not overlap
+        # (Should mechanically be true)
+        s_if = set(input_files)
+        s_of = set(output_files)
+        s_ovl = s_if.intersection(s_of)
+        if len(s_ovl) != 0:
+            print("Warning: Overlap of input/output files detected.")
+            for f in s_ovl:
+                print(f"    Overlapping file: {f}")
+
+        return g, input_files, output_files
 
 
     def create_master_file(self):
@@ -1065,10 +1142,11 @@ class StataReader:
         Return list of Stata lines detailing:
             - Input files (as comments in the first rows)
             - Proposed execution order for code files.
+            - Output files (as comments in the last rows)
         The method will fail if cyclical execution patterns are present in the
         code base.
         """
-        g, input_files = self._execution_graph()
+        g, input_files, output_files = self._execution_graph()
 
         # Check that no cycles are present
         if not nx.is_directed_acyclic_graph(g):
@@ -1087,4 +1165,7 @@ class StataReader:
         for node in nx.topological_sort(g):
             node = node.replace("\\", "/")
             master_do.append(f'do "{node}"\n')
+        for output_file in sorted(output_files):
+            output_file = output_file.replace("\\", "/")
+            master_do.append(f"// Creates ouput file {output_file}\n")
         return master_do
