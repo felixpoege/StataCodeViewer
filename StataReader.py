@@ -99,6 +99,19 @@ class StataReader:
             "^\\s*tempfile\\s+(\\w[\\w0-9_\\s]*)\\s*"
             ]
 
+    """
+    Rules for shortening lists of numbers (in forvalues loops)
+
+    All: Keep all entries
+    FirstN: Keep first N entries
+    First_Last: Keep first and last entry
+    FirstN_Last: Keep first N entries and the last one
+
+    numlist_first_n property gives the N
+    """
+    numlist_rule = 'FirstN_Last'
+    numlist_first_n = 3
+
     def __init__(self,
                  cut_paths=False,
                  base_folder=""):
@@ -188,6 +201,11 @@ class StataReader:
         return re.split("\\s+", namelist)
 
     def _split_stata_numlist(self, numlist):
+        """
+        Parse a Stata numlist.
+        Parsing is conducted according to pre-set parsing rules in the
+        header of this tool.
+        """
         numlist = numlist.strip()
         m1 = re.match("([0-9\\-]+)/([0-9\\-]+)", numlist)
         if m1:
@@ -197,7 +215,43 @@ class StataReader:
                 return [int1]
             else:
                 assert int2 > int1
-                return [x for x in range(int1, int2+1)]
+
+                """
+                Numlists are parsed according to pre-set rules
+                (defined in the header of this tool)
+                TODO: Add initializer to __init__
+                """
+                if self.numlist_rule == 'All':
+                    num_first = True
+                    num_firstN = 9999
+                    num_last = True
+                else:
+                    if self.numlist_rule.startswith("First"):
+                        num_first = True
+                    else:
+                        num_first = False
+                    if self.numlist_rule.startswith("FirstN"):
+                        num_firstN = self.numlist_first_n
+                    else:
+                        num_firstN = 0
+                    if self.numlist_rule.endswith("Last"):
+                        num_last = True
+                    else:
+                        num_last = False
+                ret_num = []
+                if num_first:
+                    ret_num.append(int1)
+                cnt = 1
+                for x in range(int1+1, int2):
+                    if cnt <= num_firstN:
+                        ret_num.append(x)
+                    else:
+                        break
+                    cnt += 1
+                if num_last:
+                    ret_num.append(int2)
+
+                return ret_num
         else:
             print(f"Warning: Cannot parse numlist {numlist}")
             return []
