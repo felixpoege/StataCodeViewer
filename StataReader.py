@@ -25,10 +25,9 @@ class StataReader:
     patterns_use = [
             ("u(s|se)?(old)?\\s+(.*)", {3: 'use'}),
             ("u(s|se)?(old)?\\s+(.*)using\\s*(.*)", {4: 'use'}),
-            ("u(s|se)?(old)?\\s+(.*),\\s*(keep|clear|replace)", {3: 'use'}),
-            # ("u(s|se)?(old)?\\s+(.*)\\s+if\\s*(.*)using\\s+(.*),\\s*(clear|replace)", {5: 'use'}),
-            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*),\\s*(clear|replace)", {4: 'use'}),
-            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*),\\s*(clear|replace)", {4: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*),\\s*(encoding|keep|clear|replace)", {3: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*),\\s*(encoding|keep|clear|replace)", {4: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*),\\s*(encoding|keep|clear|replace)", {4: 'use'}),
             ("sysu(s|se)?\\s+(.*)", {2: 'use'}),
             ("sysu(s|se)?\\s+(.*), (clear|replace)", {2: 'use'}),
             ("sysu(s|se)?\\s+(.*)\\s+if\\s*(.*),\\s*(clear|replace)", {2: 'use'}),
@@ -150,6 +149,7 @@ class StataReader:
                     g = m.group(2).strip()
                     g = g.replace("\\\\", "/").replace("\"", "")
                     g = g.replace("\\", "/")
+                    g = self.replace_globals(g)
                     self.globals[m.group(1).strip()] = g
                     break
 
@@ -463,12 +463,14 @@ class StataReader:
                     break
 
             # Iterate over all patterns and try to find the best match
+            # The best pattern is the most complex one (most capture groups)
+            # and the one that fits the longest chunk of the code line
             best_pattern = None
+            best_pattern_groups = -1
             best_pattern_len = -1
             best_pattern_type = None
             for pattern in self.patterns:
-                pat = re.compile(pattern[0])
-                m = pat.search(line.strip())
+                m = re.search(pattern[0], line.strip())
                 if m is None:
                     continue
                 # Make sure that before the command, there are only
@@ -493,8 +495,16 @@ class StataReader:
                     else:
                         print(f"Before pattern: {line_starts}")
                         continue
-                if len(pattern[0]) > best_pattern_len:
-                    best_pattern_len = len(pattern[0])
+
+                # Select the pattern with the most capture groups that also
+                # covers most of the current code line.
+                pattern_groups = len(m.groups())
+                pattern_len = len(pattern[0])
+                if (pattern_groups > best_pattern_groups or
+                    (pattern_groups == best_pattern_groups
+                     and pattern_len > best_pattern_len)):
+                    best_pattern_len = pattern_len
+                    best_pattern_groups = pattern_groups
                     best_pattern = m
                     best_pattern_type = pattern[1]
 
@@ -1168,11 +1178,11 @@ class StataReader:
 
             if content['creator'] is None:
                 if file not in input_files:
-                    input_files.append(file)
+                    input_files.append(file.replace("\\", "/"))
                 continue
             else:
                 if file not in output_files:
-                    output_files.append(file)
+                    output_files.append(file.replace("\\", "/"))
 
             for user in content['users']:
                 g.add_edge(content['creator'], user)
@@ -1188,7 +1198,6 @@ class StataReader:
                 print(f"    Overlapping file: {f}")
 
         return g, input_files, output_files
-
 
     def create_master_file(self):
         """
@@ -1214,12 +1223,10 @@ class StataReader:
         # execution order.
         master_do = []
         for input_file in sorted(input_files):
-            input_file = input_file.replace("\\", "/")
             master_do.append(f"// Requires input file {input_file}\n")
         for node in nx.topological_sort(g):
             node = node.replace("\\", "/")
             master_do.append(f'do "{node}"\n')
         for output_file in sorted(output_files):
-            output_file = output_file.replace("\\", "/")
             master_do.append(f"// Creates ouput file {output_file}\n")
         return master_do
