@@ -134,12 +134,24 @@ class StataReader:
         self.cut_paths = cut_paths
         self.base_folder = base_folder
 
+    def _try_read_file(self, fname):
+        try:
+            with open(fname, "r", encoding='utf8') as f:
+                lines = f.readlines()
+            return lines
+        except UnicodeDecodeError:
+            print(f"UnicodeDecodeError on {fname}. Try latin-1.")
+
+            with open(fname, "r", encoding='latin1') as f:
+                lines = f.readlines()
+            return lines
+
     def parse_global_file(self, fname):
         """
         Read in the globals defined in a file for later usage.
         """
-        with open(fname, "r") as f:
-            lines = f.readlines()
+        lines = self._try_read_file(fname)
+
         for line in lines:
             for pattern in self.patterns_global:
                 pat = re.compile(pattern)
@@ -187,8 +199,7 @@ class StataReader:
             self.parse_global_file(fname)
 
         print("Processing %s" % os.path.split(fname)[-1])
-        with open(fname, "r") as f:
-            lines = f.readlines()
+        lines = self._try_read_file(fname)
 
         self.parse_stata(fname, lines, local=local)
         self.postproc_stata(fname, local=local)
@@ -203,8 +214,7 @@ class StataReader:
         fname = fname.replace("\\", "/")
 
         print("Processing %s" % os.path.split(fname)[-1])
-        with open(fname, "r") as f:
-            lines = f.readlines()
+        lines = self._try_read_file(fname)
 
         # Replace the comments before and after the actual .do files
         # with use/save statements.
@@ -815,8 +825,7 @@ class StataReader:
         Cleanup: Remove the intermediate file and the input .viz file.
         """
         print("Compile graphviz content in %s" % in_filename)
-        with open(in_filename, "r") as f:
-            file_content = f.readlines()
+        file_content = self._try_read_file(in_filename)
         file_content = "\n".join(file_content)
 
         src = Source(file_content)
