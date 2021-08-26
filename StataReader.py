@@ -252,54 +252,87 @@ class StataReader:
         header of this tool.
         """
         numlist = numlist.strip()
+        # Parse list of the form 1/5 -> 1, 2, 3, 4, 5
         m1 = re.match("([0-9\\-]+)/([0-9\\-]+)", numlist)
+        # Parse list of the form 5(-1)1 -> 5, 4, 3, 2, 1
+        #                        1(1)5  -> 1, 2, 3, 4, 5
+        m2 = re.match("([0-9\\-]+)\\(([0-9\\-]+)\\)([0-9\\-]+)", numlist)
         if m1:
             int1 = int(m1.group(1))
+            int_iter = 1
             int2 = int(m1.group(2))
             if int1 == int2:
                 return [int1]
             else:
                 assert int2 > int1
-
-                """
-                Numlists are parsed according to pre-set rules
-                (defined in the header of this tool)
-                TODO: Add initializer to __init__
-                """
-                if self.numlist_rule == 'All':
-                    num_first = True
-                    num_firstN = 9999
-                    num_last = True
+        elif m2:
+            int1 = int(m2.group(1))
+            int_iter = int(m2.group(2))
+            int2 = int(m2.group(3))
+            if int1 == int2:
+                return [int1]
+            else:
+                if int_iter > 0:
+                    assert int2 > int1
+                elif int_iter < 0:
+                    assert int2 < int1
                 else:
-                    if self.numlist_rule.startswith("First"):
-                        num_first = True
-                    else:
-                        num_first = False
-                    if self.numlist_rule.startswith("FirstN"):
-                        num_firstN = self.numlist_first_n
-                    else:
-                        num_firstN = 0
-                    if self.numlist_rule.endswith("Last"):
-                        num_last = True
-                    else:
-                        num_last = False
-                ret_num = []
-                if num_first:
-                    ret_num.append(int1)
-                cnt = 1
-                for x in range(int1+1, int2):
-                    if cnt <= num_firstN:
-                        ret_num.append(x)
-                    else:
-                        break
-                    cnt += 1
-                if num_last:
-                    ret_num.append(int2)
+                    raise ValueError("int_iter should not be zero."
+                                     + " Numlist has gap zero.")
 
-                return ret_num
         else:
             print(f"Warning: Cannot parse numlist {numlist}")
             return []
+
+        """
+        Numlists are parsed according to pre-set rules
+        (defined in the header of this tool)
+        TODO: Add initializer to __init__
+        """
+        if self.numlist_rule == 'All':
+            num_first = True
+            num_firstN = 9999
+            num_last = True
+        else:
+            if self.numlist_rule.startswith("First"):
+                num_first = True
+            else:
+                num_first = False
+            if self.numlist_rule.startswith("FirstN"):
+                num_firstN = self.numlist_first_n
+            else:
+                num_firstN = 0
+            if self.numlist_rule.endswith("Last"):
+                num_last = True
+            else:
+                num_last = False
+        ret_num = []
+        if num_first:
+            ret_num.append(int1)
+        cnt = 1
+
+        def _valid(x, int1, int2, int_iter):
+            if int_iter > 0:
+                return x < int2
+            elif int_iter < 0:
+                return x > int2
+            else:
+                raise ValueError("int_iter should not be zero."
+                                 + " Numlist has gap zero.")
+
+        x = int1
+        while _valid(x, int1, int2, int_iter):
+            if cnt <= num_firstN:
+                ret_num.append(x)
+            else:
+                break
+            cnt += 1
+            x += int_iter
+
+        if num_last:
+            ret_num.append(int2)
+
+        return ret_num
 
     def parse_stata(self, fname, lines, local=None):
         """
