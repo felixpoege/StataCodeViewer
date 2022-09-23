@@ -114,6 +114,7 @@ class StataReader:
 
     def __init__(self,
                  cut_paths=False,
+                 verbose_locals=False,
                  base_folder=""):
         """
         cut_paths: Only use filenames as nodes for code, input and output
@@ -121,6 +122,7 @@ class StataReader:
                    if file names are not unique.
         base_folder: Folder of the Stata repository. Either set it directly or
             use read_folder to set it automatically.
+        verbose_locals: Increase verbosity of local parsing.
         """
         self.patterns = self.patterns_use
         self.patterns.extend(self.patterns_save)
@@ -129,7 +131,8 @@ class StataReader:
         self.globals = {}
         self.disregarded_nodes = []
         self.verbose_comments = False
-        self.verbose_locals = False
+        self.verbose_bef_pat = False
+        self.verbose_locals = verbose_locals
         self.indent = "\t"
         self.cut_paths = cut_paths
         self.base_folder = base_folder
@@ -180,7 +183,7 @@ class StataReader:
             instr = instr.replace("${" + glob + "}", self.globals[glob])
             # Global replacement without curved bracket surrounding the global
             # name.
-            instr = re.sub("\\$" + glob + "([ /])",
+            instr = re.sub("\\$" + glob + "([ /\"])",
                            self.globals[glob] + "\\1",
                            instr)
         return instr
@@ -441,13 +444,13 @@ class StataReader:
             if line.strip().startswith("foreach"):
 
                 m1 = re.search("foreach\\s+(.*)\\s+in\\s+(.*)\\s+\\{", line)
-                m2 = "foreach\\s+(.*)\\s+of\\s+varlist\\s+(.*)\\s+\\{"
+                m2 = "foreach\\s+(.*)\\s+of\\s+(var[l]?[i]?[s]?[t]?|new[l]?[i]?[s]?[t]?)\\s+(.*)\\s+\\{"
                 m2 = re.search(m2, line)
                 m3 = "foreach\\s+(.*)\\s+of\\s+local\\s+(.*)\\s+\\{"
                 m3 = re.search(m3, line)
                 m3g = "foreach\\s+(.*)\\s+of\\s+global\\s+(.*)\\s+\\{"
                 m3g = re.search(m3g, line)
-                m4 = "foreach\\s+(.*)\\s+of\\s+numlist\\s+(.*)\\s+\\{"
+                m4 = "foreach\\s+(.*)\\s+of\\s+num[l]?[i]?[s]?[t]?\\s+(.*)\\s+\\{"
                 m4 = re.search(m4, line)
                 if m1 is not None:
                     lcl_name = m1.group(1)
@@ -457,8 +460,29 @@ class StataReader:
                             'local_values': lcl_vals
                             }
                     bracket_level += 1
+                    if self.verbose_locals:
+                        print(f"Found foreach local: {lcl_name} -> {lcl_vals}")
+                # This pattern is tricky, as it can depend on the content
+                # of the dataset in memory at the time.
+                # Basically, if there is a * or - in the varlist, then we can't
+                # do anything about it.
                 elif m2 is not None:
+                    lcl_name = m2.group(1)
+                    lcl_vals = self._split_stata_namelist(m2.group(3))
+                    lcl_test = "".join(lcl_vals)
+                    if lcl_test.find("*") != -1 or lcl_test.find("-") != -1:
+                        print("Warning: foreach varlist local cannot be "
+                              + "parsed due to wildcard in the variable "
+                              + "list.")
+                    else:
+                        local[lcl_name] = {
+                                'bracket_level': bracket_level+1,
+                                'local_values': lcl_vals
+                                }
                     bracket_level += 1
+                    if self.verbose_locals:
+                        print(f"Found foreach local: {lcl_name} -> {lcl_vals}")
+                # TODO: Implement the replacement of local/global values
                 elif m3 is not None:
                     bracket_level += 1
                 elif m3g is not None:
@@ -472,6 +496,9 @@ class StataReader:
                                 'bracket_level': bracket_level+1,
                                 'local_values': lcl_vals
                                 }
+                        if self.verbose_locals:
+                            print("Found foreach local: "
+                                  + f"{lcl_name} -> {lcl_vals}")
                     bracket_level += 1
                 else:
                     raise ValueError(f"Unknown foreach loop: {line}")
@@ -488,6 +515,9 @@ class StataReader:
                                 'bracket_level': bracket_level+1,
                                 'local_values': lcl_vals
                                 }
+                        if self.verbose_locals:
+                            print("Found foreach local: "
+                                      + f"{lcl_name} -> {lcl_vals}")
                     bracket_level += 1
 
             # =================================================================
@@ -569,12 +599,16 @@ class StataReader:
                         pass
                     elif line_starts.startswith("if "):
                         if line_starts.endswith("graph"):
-                            print(f"Before pattern: {line_starts}")
+                            if self.verbose_bef_pat:
+                                print("Before pattern [if, graph]: "
+                                      + f"{line_starts}")
                             continue
-                        print(f"'if' line start: {line_starts}")
-                        pass
+                        if self.verbose_bef_pat:
+                            print("'if' line start [if, !graph]: "
+                                  + f"{line_starts}")
                     else:
-                        print(f"Before pattern: {line_starts}")
+                        if self.verbose_bef_pat:
+                            print(f"Before pattern [oth]: {line_starts}")
                         continue
 
                 # Select the pattern with the most capture groups that also
@@ -1220,13 +1254,17 @@ class StataReader:
 
     def read_folder(self, folder, exclude=[],
                     walk=False,
-                    as_master=False):
+                    as_master=False,
+                    set_base_folder='if_null'):
         """
         Read a directory and parse all .do files that are encountered.
 
         exclude: Ignore files with these names.
         walk: read subdirs as well.
         as_master: Instead of calling read_stata, call read_stata_master.
+        
+        set_base_folder: Set the base folder. Default: Set it only if it was
+            not set at initialization. Put 'True' if it should always be set.
         """
         for file in os.scandir(folder):
             file_name = str(file.name)
@@ -1248,7 +1286,11 @@ class StataReader:
                 # print(f"Unknown file: '{file_name}'")
 
         # This needs to be at the end to set it at the last recursion.
-        self.base_folder = folder
+        if set_base_folder == "if_null":
+            if self.base_folder == "":
+                self.base_folder = folder
+        elif set_base_folder == True:
+            self.base_folder = folder
 
     def get_dta_files(self):
         """
@@ -1374,7 +1416,8 @@ class StataReader:
             cycles = nx.cycles.find_cycle(g)
             print("ERROR: Execution graph is not DAG!")
             print("Cycles:")
-            print(cycles)
+            for (f_in, f_out) in cycles:
+                print(f"{f_in} -> {f_out}")
             raise AssertionError("Execution graph is not DAG")
 
         # Create the output: First, detected input files. Then, proposed
