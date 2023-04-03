@@ -931,17 +931,18 @@ class StataReader:
         # Try to find an ordering of columns: Use topological sorting of
         # networkx
         g, l_in, l_out = self._execution_graph()
-        l_sorted = [d_files_rev[x] for x in nx.topological_sort(g)]
 
-        actions = pd.DataFrame(actions).T
-        actions = actions[l_sorted]
-        actions = actions.sort_values(l_sorted, ascending=False)
-        actions = actions[actions.index != 'init_file']
+        try:
+            l_sorted = [d_files_rev[x] for x in nx.topological_sort(g)]
 
-        return actions
+            actions = pd.DataFrame(actions).T
+            actions = actions[l_sorted]
+            actions = actions.sort_values(l_sorted, ascending=False)
+            actions = actions[actions.index != 'init_file']
 
-
-
+            return actions
+        except:
+            print(nx.cycles.find_cycle(g))
 
     def export_graphviz(self, file,
                         separate_groups=False,
