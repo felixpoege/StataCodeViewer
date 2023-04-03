@@ -7,12 +7,21 @@ See also: https://github.com/johnyf/pycflow2dot
 Required libraries:
     - graphviz
 
+The module infers the file input-output structure of Stata files from the
+Stata code.
+
+The information deduced from the code is then visualized as a flowchart.
+
+As an additional option, the module can read information given in headers
+of non-Stata files about input and output files.
+
 @author: Felix Pöge
 """
 import re
 import os
 import sys
 import math
+import shutil
 import pandas as pd
 import networkx as nx
 from graphviz import Source
@@ -26,51 +35,58 @@ class StataReader:
     patterns_use = [
             ("u(s|se)?(old)?\\s+(.*)", {3: 'use'}),
             ("u(s|se)?(old)?\\s+(.*)using\\s*(.*)", {4: 'use'}),
-            ("u(s|se)?(old)?\\s+(.*),\\s*(encoding|keep|clear|replace)", {3: 'use'}),
-            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*),\\s*(encoding|keep|clear|replace)", {4: 'use'}),
-            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*),\\s*(encoding|keep|clear|replace)", {4: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*?),\\s*(encoding|keep|clear|replace)", {3: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*?),\\s*(encoding|keep|clear|replace)", {4: 'use'}),
+            ("u(s|se)?(old)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*?),\\s*(encoding|keep|clear|replace)", {4: 'use'}),
             ("sysu(s|se)?\\s+(.*)", {2: 'use'}),
-            ("sysu(s|se)?\\s+(.*), (clear|replace)", {2: 'use'}),
-            ("sysu(s|se)?\\s+(.*)\\s+if\\s*(.*),\\s*(clear|replace)", {2: 'use'}),
-            ("sysu(s|se)?\\s+(.*)using\\s+(.*),\\s*(clear|replace)", {3: 'use'}),
-            ("sysu(s|se)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*), (clear|replace)", {3: 'use'}),
+            ("sysu(s|se)?\\s+(.*?), (clear|replace)", {2: 'use'}),
+            ("sysu(s|se)?\\s+(.*)\\s+if\\s*(.*?),\\s*(clear|replace)", {2: 'use'}),
+            ("sysu(s|se)?\\s+(.*)using\\s+(.*?),\\s*(clear|replace)", {3: 'use'}),
+            ("sysu(s|se)?\\s+(.*)using\\s+(.*)\\s+if\\s*(.*?), (clear|replace)", {3: 'use'}),
             ("joinby\\s+(.*)using\\s+(.*)", {2: 'use'}),
-            ("joinby\\s+(.*)using\\s+(.*),\\s*(unm|_merge|nol|update|replace)", {2: 'use'}),
+            ("joinby\\s+(.*)using\\s+(.*?),\\s*(unm|_merge|nol|update|replace)", {2: 'use'}),
             ("merge\\s+(.*)using\\s+(.*)", {2: 'use'}),
-            ("merge\\s+(.*)using\\s+(.*),", {2: 'use'}),
-            ("reclink[2]?\\s+(.*)using\\s+(.*),", {2: 'use'}),
-            ("append\\s+using\\s+(.*),\\s*(keep|force|gen)", {1: 'use'}),
+            ("merge\\s+(.*)using\\s+(.*?),", {2: 'use'}),
+            ("reclink[2]?\\s+(.*)using\\s+(.*?),", {2: 'use'}),
+            ("append\\s+using\\s+(.*?),\\s*(keep|force|gen)", {1: 'use'}),
             ("append\\s+using\\s+(.*)", {1: 'use'}),
             ("import\\s+delimited\\s+(.*)", {1: 'use_ext'}),
-            ("import\\s+delimited\\s+(.*),", {1: 'use_ext'}),
+            ("import\\s+delimited\\s+(.*?),", {1: 'use_ext'}),
+            # Special case of the delimiter being a comma
+            ("import\\s+delimited\\s+(.*?),(.*)delim[i]?[t]?[e]?[r]?[s]?\(\",", {1: 'use_ext'}),
             ("import\\s+delimited\\s+(.*)using(.*)", {2: 'use_ext'}),
-            ("import\\s+delimited\\s+(.*)using(.*),", {2: 'use_ext'}),
-            ("import\\s+excel\\s+(using\\s+)?(.*),", {2: 'use_ext'}),
+            ("import\\s+delimited\\s+(.*)using(.*?),", {2: 'use_ext'}),
+            ("infix\\s+(.*)using(.*?),", {2: 'use_ext'}),
+            ("infix\\s+(.*)using(.*)", {2: 'use_ext'}),
+            ("import\\s+excel\\s+(using\\s+)?(.*?),", {2: 'use_ext'}),
             ("insheet\\s+(.*)using\\s+(.*)", {2: 'use'}),
-            ("^do\\s+(.*)(?:,)?", {1: 'do'}),
-            ("\\s+do\\s+(.*)(?:,)?", {1: 'do'}),
+            ("^do\\s+(.*?)(?:,)?", {1: 'do'}),
+            ("\\s+do\\s+(.*?)(?:,)?", {1: 'do'}),
             ("estimates use\\s+(.*)", {1: 'use'}),
             ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),(.*?)read", {2: 'use_ext'}),
             ]
     patterns_save = [
             ("sa(v|ve)?(old)?\\s+(.*)", {3: 'save'}),
-            ("sa(v|ve)?(old)?\\s+(.*),", {3: 'save'}),
+            ("sa(v|ve)?(old)?\\s+(.*?),", {3: 'save'}),
             ("erase\\s+(.*)", {1: 'erase'}),
             ("copy\\s+\"(.*)\"\\s+\"(.*)\"\\s*,\\s*replace",
              {1: 'use', 2: 'save'}),
             ("tempfile\\s+(.*)", {1: 'tempfile'}),
-            ("graph\\s+export\\s+(.*), replace(.*)?", {1: 'export'}),
-            ("graph\\s+export\\s+(.*),", {1: 'export'}),
-            ("graph\\s+export\\s+(.*)", {1: 'export'}),
+            ("graph\\s+export\\s+(.*?), replace(.*)?", {1: 'export'}),
+            ("graph\\s+export\\s+(.*?),", {1: 'export'}),
+            ("graph\\s+export\\s+(.*?)", {1: 'export'}),
             ("file\\s+open\\s+(.*)\\s+using\\s+(.*?),(.*?)write", {2: 'export'}),
             ("esttab\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
             ("outreg\\s+(.*)\\s+using\\s+(.*?),", {2: 'export'}),
             ("estimates save\\s+(.*)", {1: 'save'}),
-            ("estimates save\\s+(.*),", {1: 'save'}),
-            ("export\\s+(delimited|excel)\\s+(.*)", {2: 'export'}),
-            ("export\\s+(delimited|excel)\\s+(.*),", {2: 'export'}),
-            ("export\\s+(delimited|excel)\\s+(.*)\\s*using(.*),", {3: 'export'}),
-            ("export\\s+(delimited|excel)\\s+(.*)\\s*using(.*)", {3: 'export'}),
+            ("estimates save\\s+(.*?),", {1: 'save'}),
+            ("export\\s+(delimited|excel)\\s+(.*?)", {2: 'export'}),
+            ("export\\s+(delimited|excel)\\s+(.*?),", {2: 'export'}),
+            ("export\\s+(delimited|excel)\\s+(.*?),", {2: 'export'}),
+            ("export\\s+(delimited|excel)\\s+(.*)\\s*using(.*?),", {3: 'export'}),
+            ("export\\s+(delimited|excel)\\s+(.*)\\s*using(.*?)", {3: 'export'}),
+            ("outsheet\\s+using(.*)", {1: 'export'}),
+            ("outsheet\\s+using(.*?),", {1: 'export'}),
             ]
 
     patterns_exclude = [
@@ -112,15 +128,36 @@ class StataReader:
     numlist_rule = 'FirstN_Last'
     numlist_first_n = 3
 
+    DEFAULT_HEADERS = {
+        'filetypes': ['.R', '.py'],
+        'input': ['@Inputs:', '# Inputs:'],
+        'output': ['@Outputs:', '# Outputs:'],
+        'other': ['# Depends On:',
+                  '# Other Notes:',
+                  '@Depends On:',
+                  '@Other Notes:',
+                  '"""'  # End processing of tags if Python comments end
+                  ]
+        }
+
     def __init__(self,
                  cut_paths=False,
-                 base_folder=""):
+                 verbose_locals=False,
+                 base_folder="",
+                 header_patterns=None):
         """
         cut_paths: Only use filenames as nodes for code, input and output
                    files. This makes the display more clunky, but is necessary
                    if file names are not unique.
+
         base_folder: Folder of the Stata repository. Either set it directly or
             use read_folder to set it automatically.
+
+        verbose_locals: Increase verbosity of local parsing.
+
+        header_patterns: To use other files (e.g., R, Python) as an input,
+            specify a dictionary as DEFAULT_HEADERS
+
         """
         self.patterns = self.patterns_use
         self.patterns.extend(self.patterns_save)
@@ -129,10 +166,12 @@ class StataReader:
         self.globals = {}
         self.disregarded_nodes = []
         self.verbose_comments = False
-        self.verbose_locals = False
+        self.verbose_bef_pat = False
+        self.verbose_locals = verbose_locals
         self.indent = "\t"
         self.cut_paths = cut_paths
         self.base_folder = base_folder
+        self.header_patterns = header_patterns
 
     def _try_read_file(self, fname):
         try:
@@ -180,7 +219,7 @@ class StataReader:
             instr = instr.replace("${" + glob + "}", self.globals[glob])
             # Global replacement without curved bracket surrounding the global
             # name.
-            instr = re.sub("\\$" + glob + "([ /])",
+            instr = re.sub("\\$" + glob + "([ /\"])",
                            self.globals[glob] + "\\1",
                            instr)
         return instr
@@ -203,6 +242,109 @@ class StataReader:
 
         self.parse_stata(fname, lines, local=local)
         self.postproc_stata(fname, local=local)
+
+    def read_header(self,
+                    fname,
+                    parse_globals=True):
+        """
+        Parse the contents of a header of a non-Stata file (e.g. R, Py).
+        How to parse the header is defined when initializing this the Reader
+        class.
+
+        Parameters
+        ----------
+        fname : Path to file.
+        
+        parse_globals : Process globals embedded in header files using
+        information from pre-loaded global files
+        (i.e., apply StataReader.replace_globals)
+
+
+        Returns
+        -------
+        None.
+
+        """
+        # Ensure that a definition of header patterns is given.
+        assert self.header_patterns is not None
+        assert 'input' in self.header_patterns
+        assert 'output' in self.header_patterns
+
+        print(f"Processing {os.path.split(fname)[-1]}")
+        lines = self._try_read_file(fname)
+
+        # Which part of the header is currently being parsed?
+        # None, Input, Output
+        reading_state = 'None'
+        header_input = ""
+        header_output = ""
+
+        # Parse the header (input/output/other tags)
+        for line in lines:
+            for tag in self.header_patterns['input']:
+                if line.startswith(tag):
+                    reading_state = 'Input'
+                    line = line[len(tag):]
+                    break
+            for tag in self.header_patterns['output']:
+                if line.startswith(tag):
+                    reading_state = 'Output'
+                    line = line[len(tag):]
+                    break
+            for tag in self.header_patterns['other']:
+                if line.startswith(tag):
+                    reading_state = 'None'
+                    line = line[len(tag):]
+                    break
+
+            # Some cleaning to avoid mistakes in compiling the graph
+            line = line.replace("*", "\*")
+            line = line.replace('"', "")
+
+            if reading_state == 'Input':
+                header_input += line + ","
+            elif reading_state == 'Output':
+                header_output += line + ","
+                
+        if parse_globals:
+            header_input = self.replace_globals(header_input)
+            header_output = self.replace_globals(header_output)
+
+        # Skip files with empty headers
+        if header_input.strip() + header_input.strip() == "":
+            return
+
+        # Comprehend it ... add the header as a parsed file.
+        if fname not in self.parsed:
+            self.parsed[fname] = {}
+
+        i = 0
+        for finput in header_input.split(","):
+            finput = finput.strip()
+            if finput == "":
+                continue
+            if finput.endswith(".dta"):
+                finput = finput[:-4]
+                use_type = "use"
+            else:
+                use_type = "use_ext"
+            self.parsed[fname][i] = (use_type, finput)
+            i += 1
+
+        i = 0
+        for foutput in header_output.split(","):
+            foutput = foutput.strip()
+            if foutput == "":
+                continue
+            if foutput.endswith(".dta"):
+                foutput = foutput[:-4]
+                exp_type = "save"
+            else:
+                exp_type = "export"
+            self.parsed[fname][100 + i] = (exp_type, foutput)
+            i += 1
+
+
 
     def read_stata_master(self, fname,
                           local=None):
@@ -441,13 +583,13 @@ class StataReader:
             if line.strip().startswith("foreach"):
 
                 m1 = re.search("foreach\\s+(.*)\\s+in\\s+(.*)\\s+\\{", line)
-                m2 = "foreach\\s+(.*)\\s+of\\s+varlist\\s+(.*)\\s+\\{"
+                m2 = "foreach\\s+(.*)\\s+of\\s+(var[l]?[i]?[s]?[t]?|new[l]?[i]?[s]?[t]?)\\s+(.*)\\s+\\{"
                 m2 = re.search(m2, line)
                 m3 = "foreach\\s+(.*)\\s+of\\s+local\\s+(.*)\\s+\\{"
                 m3 = re.search(m3, line)
                 m3g = "foreach\\s+(.*)\\s+of\\s+global\\s+(.*)\\s+\\{"
                 m3g = re.search(m3g, line)
-                m4 = "foreach\\s+(.*)\\s+of\\s+numlist\\s+(.*)\\s+\\{"
+                m4 = "foreach\\s+(.*)\\s+of\\s+num[l]?[i]?[s]?[t]?\\s+(.*)\\s+\\{"
                 m4 = re.search(m4, line)
                 if m1 is not None:
                     lcl_name = m1.group(1)
@@ -457,8 +599,29 @@ class StataReader:
                             'local_values': lcl_vals
                             }
                     bracket_level += 1
+                    if self.verbose_locals:
+                        print(f"Found foreach local: {lcl_name} -> {lcl_vals}")
+                # This pattern is tricky, as it can depend on the content
+                # of the dataset in memory at the time.
+                # Basically, if there is a * or - in the varlist, then we can't
+                # do anything about it.
                 elif m2 is not None:
+                    lcl_name = m2.group(1)
+                    lcl_vals = self._split_stata_namelist(m2.group(3))
+                    lcl_test = "".join(lcl_vals)
+                    if lcl_test.find("*") != -1 or lcl_test.find("-") != -1:
+                        print("Warning: foreach varlist local cannot be "
+                              + "parsed due to wildcard in the variable "
+                              + "list.")
+                    else:
+                        local[lcl_name] = {
+                                'bracket_level': bracket_level+1,
+                                'local_values': lcl_vals
+                                }
                     bracket_level += 1
+                    if self.verbose_locals:
+                        print(f"Found foreach local: {lcl_name} -> {lcl_vals}")
+                # TODO: Implement the replacement of local/global values
                 elif m3 is not None:
                     bracket_level += 1
                 elif m3g is not None:
@@ -472,6 +635,9 @@ class StataReader:
                                 'bracket_level': bracket_level+1,
                                 'local_values': lcl_vals
                                 }
+                        if self.verbose_locals:
+                            print("Found foreach local: "
+                                  + f"{lcl_name} -> {lcl_vals}")
                     bracket_level += 1
                 else:
                     raise ValueError(f"Unknown foreach loop: {line}")
@@ -488,6 +654,9 @@ class StataReader:
                                 'bracket_level': bracket_level+1,
                                 'local_values': lcl_vals
                                 }
+                        if self.verbose_locals:
+                            print("Found foreach local: "
+                                      + f"{lcl_name} -> {lcl_vals}")
                     bracket_level += 1
 
             # =================================================================
@@ -569,12 +738,16 @@ class StataReader:
                         pass
                     elif line_starts.startswith("if "):
                         if line_starts.endswith("graph"):
-                            print(f"Before pattern: {line_starts}")
+                            if self.verbose_bef_pat:
+                                print("Before pattern [if, graph]: "
+                                      + f"{line_starts}")
                             continue
-                        print(f"'if' line start: {line_starts}")
-                        pass
+                        if self.verbose_bef_pat:
+                            print("'if' line start [if, !graph]: "
+                                  + f"{line_starts}")
                     else:
-                        print(f"Before pattern: {line_starts}")
+                        if self.verbose_bef_pat:
+                            print(f"Before pattern [oth]: {line_starts}")
                         continue
 
                 # Select the pattern with the most capture groups that also
@@ -744,8 +917,7 @@ class StataReader:
         Do postprocessing:
             - Replace \\ by /
             - Replace // by / (filenames)
-            - When a file is
-            d, remove it from what happened before
+            - When a file is erased, remove it from what happened before
              (+ some checks)
             - TODO: Processing of Globals
 
@@ -815,7 +987,8 @@ class StataReader:
                         continue
                     # The file was used after it was erased.
                     if j > i and t[0] != "tempfile":
-                        print("File %s was used after being erased." % t[1])
+                        print(f"Warning: File {t[1]} was used "
+                              + "after being erased.")
                     elif j > i and t[0] == "tempfile":
                         self.parsed[fname].pop(j)
                     else:
@@ -850,7 +1023,9 @@ class StataReader:
         return f"\"{node}\" [color={color}, URL=\"file:///{fname_nonew}\"," \
             + f" label=\"{node_lbl}\"]"
 
-    def compile_graphviz(self, in_filename, out_filename,
+    def compile_graphviz(self,
+                         in_filename,
+                         out_filename,
                          view=True,
                          cleanup=True,
                          render_format='pdf'):
@@ -862,19 +1037,36 @@ class StataReader:
         file_content = "\n".join(file_content)
 
         src = Source(file_content)
-        src.render(out_filename, view=True,
+        src.render(filename=out_filename + ".tmp",
+                   outfile=out_filename,
+                   view=view,
+                   cleanup=cleanup,
                    format=render_format)
 
         if cleanup:
             os.remove(in_filename)
-            os.remove(out_filename)
+            # os.remove(out_filename)
+
+        # If the output filename comes with the right file ending, remove it
+        # and move the created file.
+        # (Otherwise the output is out_filename.pdf.pdf)
+        """
+        if out_filename.endswith("." + render_format):
+            shutil.move(out_filename + "." + render_format,
+                        out_filename[:-len(render_format)-1])
+        """
 
     def _proc_node_name(self, fname):
         """
-        Format the node names as configured.
+        Format the node names as configured:
+            - Convert backslashes to forward slashes
+            - Replace the base_folder (if it is set)
+            - Retain only the filename if requested (cut_paths option)
         """
         fname = fname.replace("\\", "/")
         fname = fname.replace(self.base_folder.replace("\\", "/"), "")
+        if fname.startswith("/"):
+            fname = fname[1:]
         if self.cut_paths:
             return os.path.split(fname)[1]
         else:
@@ -886,6 +1078,12 @@ class StataReader:
         Export for display as table.
         In the rows, individual (input/output) files are listed.
         In columns, .do files doing the input or output are listed.
+
+        I: Initialized.
+        D: Executed ('do').
+        U: Use.
+        S: Save.
+        E: Export.
 
         Returns a pandas DataFrame.
         """
@@ -932,17 +1130,24 @@ class StataReader:
         # networkx
         g, l_in, l_out = self._execution_graph()
 
-        try:
-            l_sorted = [d_files_rev[x] for x in nx.topological_sort(g)]
+        # Check that no cycles are present
+        if not nx.is_directed_acyclic_graph(g):
+            cycles = nx.cycles.find_cycle(g)
+            print("ERROR: Execution graph is not DAG!")
+            print("Cycles:")
+            for (f_in, f_out) in cycles:
+                print(f"{f_in} -> {f_out}")
+            raise AssertionError("Execution graph is not DAG")
 
-            actions = pd.DataFrame(actions).T
-            actions = actions[l_sorted]
-            actions = actions.sort_values(l_sorted, ascending=False)
-            actions = actions[actions.index != 'init_file']
 
-            return actions
-        except:
-            print(nx.cycles.find_cycle(g))
+        l_sorted = [d_files_rev[x] for x in nx.topological_sort(g)]
+
+        actions = pd.DataFrame(actions).T
+        actions = actions[l_sorted]
+        actions = actions.sort_values(l_sorted, ascending=False)
+        actions = actions[actions.index != 'init_file']
+
+        return actions
 
     def export_graphviz(self, file,
                         separate_groups=False,
@@ -1219,27 +1424,37 @@ class StataReader:
         if f_opened:
             f.close()
 
-    def read_folder(self, folder, exclude=[],
+    def read_folder(self,
+                    folder,
+                    exclude=[],
                     walk=False,
-                    as_master=False):
+                    as_master=False,
+                    set_base_folder='if_null'):
         """
         Read a directory and parse all .do files that are encountered.
 
         exclude: Ignore files with these names.
         walk: read subdirs as well.
         as_master: Instead of calling read_stata, call read_stata_master.
+
+        set_base_folder: Set the base folder. Default: Set it only if it was
+            not set at initialization. Put 'True' if it should always be set.
         """
         for file in os.scandir(folder):
             file_name = str(file.name)
             if file_name in exclude:
                 print(f"Excluded file: '{file_name}'")
                 continue
-            if file.is_file() and os.path.splitext(file_name)[1] == ".do":
+            fext = os.path.splitext(file_name)[1]
+            if file.is_file() and fext == ".do":
                 print(f"Reading Stata file '{file_name}'")
                 if not as_master:
                     self.read_stata(os.path.join(folder, file_name))
                 else:
                     self.read_stata_master(os.path.join(folder, file_name))
+            elif file.is_file() and self.header_patterns is not None:
+                if fext in self.header_patterns['filetypes']:
+                    self.read_header(os.path.join(folder, file_name))
             elif file.is_dir() and walk:
                 self.read_folder(os.path.join(folder, file_name),
                                  walk=True,
@@ -1249,7 +1464,11 @@ class StataReader:
                 # print(f"Unknown file: '{file_name}'")
 
         # This needs to be at the end to set it at the last recursion.
-        self.base_folder = folder
+        if set_base_folder == "if_null":
+            if self.base_folder == "":
+                self.base_folder = folder
+        elif set_base_folder is True:
+            self.base_folder = folder
 
     def get_dta_files(self):
         """
@@ -1281,6 +1500,11 @@ class StataReader:
         # that use it.
         # In the final graph, nodes will be Stata code files.
         for node in self.parsed.keys():
+
+            # Do not process further if the file is to be disregarded.
+            if node in self.disregarded_nodes:
+                continue
+
             if node not in g.nodes:
                 g.add_node(node)
 
@@ -1375,7 +1599,8 @@ class StataReader:
             cycles = nx.cycles.find_cycle(g)
             print("ERROR: Execution graph is not DAG!")
             print("Cycles:")
-            print(cycles)
+            for (f_in, f_out) in cycles:
+                print(f"{f_in} -> {f_out}")
             raise AssertionError("Execution graph is not DAG")
 
         # Create the output: First, detected input files. Then, proposed
