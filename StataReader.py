@@ -1124,7 +1124,8 @@ class StataReader:
             raise AssertionError("Execution graph is not DAG")
 
 
-        l_sorted = [d_files_rev[x] for x in nx.topological_sort(g)]
+        l_sorted = [d_files_rev[x] for x in
+                    nx.lexicographical_topological_sort(g)]
 
         actions = pd.DataFrame(actions).T
         actions = actions[l_sorted]
@@ -1592,7 +1593,7 @@ class StataReader:
         master_do = []
         for input_file in sorted(input_files):
             master_do.append(f"// Requires input file {input_file}\n")
-        for node in nx.topological_sort(g):
+        for node in nx.lexicographical_topological_sort(g):
             node = node.replace("\\", "/")
             master_do.append(f'do "{node}"\n')
         for output_file in sorted(output_files):
