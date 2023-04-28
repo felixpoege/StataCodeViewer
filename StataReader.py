@@ -135,7 +135,9 @@ class StataReader:
         'other': ['# Depends On:',
                   '# Other Notes:',
                   '@Depends On:',
-                  '@Other Notes:']
+                  '@Other Notes:',
+                  '"""'  # End processing of tags if Python comments end
+                  ]
         }
 
     def __init__(self,
@@ -241,7 +243,9 @@ class StataReader:
         self.parse_stata(fname, lines, local=local)
         self.postproc_stata(fname, local=local)
 
-    def read_header(self, fname):
+    def read_header(self,
+                    fname,
+                    parse_globals=True):
         """
         Parse the contents of a header of a non-Stata file (e.g. R, Py).
         How to parse the header is defined when initializing this the Reader
@@ -250,6 +254,10 @@ class StataReader:
         Parameters
         ----------
         fname : Path to file.
+        
+        parse_globals : Process globals embedded in header files using
+        information from pre-loaded global files
+        (i.e., apply StataReader.replace_globals)
 
 
         Returns
@@ -297,6 +305,10 @@ class StataReader:
                 header_input += line + ","
             elif reading_state == 'Output':
                 header_output += line + ","
+                
+        if parse_globals:
+            header_input = self.replace_globals(header_input)
+            header_output = self.replace_globals(header_output)
 
         # Skip files with empty headers
         if header_input.strip() + header_input.strip() == "":
@@ -905,8 +917,7 @@ class StataReader:
         Do postprocessing:
             - Replace \\ by /
             - Replace // by / (filenames)
-            - When a file is
-            d, remove it from what happened before
+            - When a file is erased, remove it from what happened before
              (+ some checks)
             - TODO: Processing of Globals
 
@@ -1047,10 +1058,15 @@ class StataReader:
 
     def _proc_node_name(self, fname):
         """
-        Format the node names as configured.
+        Format the node names as configured:
+            - Convert backslashes to forward slashes
+            - Replace the base_folder (if it is set)
+            - Retain only the filename if requested (cut_paths option)
         """
         fname = fname.replace("\\", "/")
         fname = fname.replace(self.base_folder.replace("\\", "/"), "")
+        if fname.startswith("/"):
+            fname = fname[1:]
         if self.cut_paths:
             return os.path.split(fname)[1]
         else:
